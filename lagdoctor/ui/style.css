@@ -230,3 +230,4 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .vk{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
 .vk.ok{background:rgba(46,229,157,.15);color:var(--ok)}.vk.ko{background:rgba(255,92,122,.15);color:var(--bad)}
 .vk.na{background:rgba(255,255,255,.07);color:var(--mut)}
+.modal-card.wide{width:min(860px,94vw)}

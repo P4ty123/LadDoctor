@@ -1,3 +1,13 @@
+## LagDoctor 5.10.1
+
+- Game mode: i servizi di Windows Update (wuauserv, UsoSvc) che Windows fa ripartire da solo vengono fermati di
+  nuovo mentre giochi.
+- Priorita' GPU del gioco: ora si legge correttamente (permesso giusto) e la game mode attiva il privilegio di
+  Windows necessario ad alzare le priorita'.
+- La verifica e' ora un pannello a parte ("Verifica ottimizzazioni", disponibile appena la game mode si attiva, anche
+  dalla Panoramica) che si aggiorna da solo, con l'elenco completo: ogni app chiusa e ogni programma messo a
+  priorita' bassa, per nome.
+
 ## LagDoctor 5.10.0
 
 - Game mode: nuova sezione "Verifica dal vivo". Mentre giochi controlla lo stato REALE di Windows per ogni

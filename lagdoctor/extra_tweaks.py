@@ -14,8 +14,16 @@ from .tweaks import DWORD, SZ, CmdTweak, RegTweak, Tweak, ps, run
 _APPX_CACHE = {"t": 0, "names": None}
 
 
+_APPX_LOCK = __import__("threading").Lock()
+
+
 def installed_appx():
     """Nomi dei pacchetti Store installati per l'utente (una sola chiamata, in cache 20 s)."""
+    with _APPX_LOCK:
+        return _installed_appx()
+
+
+def _installed_appx():
     if _APPX_CACHE["names"] is not None and time.time() - _APPX_CACHE["t"] < 20:
         return _APPX_CACHE["names"]
     code, out = ps("Get-AppxPackage | ForEach-Object Name", timeout=90)

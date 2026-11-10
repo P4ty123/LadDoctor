@@ -152,15 +152,58 @@ def catalog_json():
             "checked": bool(st)}
 
 
+STATUS_TIMEOUT = 25  # secondi massimi per una voce: se Windows non risponde la segno "non verificabile"
+
+
+def _status_of(t):
+    t0 = time.time()
+    try:
+        st = t.status()
+    except Exception:
+        st = None
+    return st, time.time() - t0
+
+
 def refresh_statuses(job, ids=None):
+    """Controlla lo stato delle voci, 6 alla volta. Una voce bloccata non blocca le altre ne' l'interfaccia."""
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
     todo = [tweaks.BY_ID[i] for i in ids] if ids else tweaks.for_vendor(vendor())
-    for n, t in enumerate(todo, 1):
-        if job and n % 8 == 0:
-            job.msg("Controllo impostazioni: %d/%d" % (n, len(todo)))
+    pool = ThreadPoolExecutor(max_workers=6)
+    started = {}
+    pending = set()
+    for t in todo:
+        f = pool.submit(_status_of, t)
+        started[f] = (t, time.time())
+        pending.add(f)
+    done_n, slow = 0, []
+    while pending:
+        finished, pending = wait(pending, timeout=1.0, return_when=FIRST_COMPLETED)
+        for f in finished:
+            t, _t0 = started[f]
+            st, dt = f.result()
+            STATE["statuses"][t.id] = st
+            done_n += 1
+            if dt > 3:
+                slow.append("%s %.1fs" % (t.id, dt))
+        now = time.time()
+        for f in list(pending):  # una voce che non risponde: la lascio "non verificabile" e vado avanti
+            t, t0 = started[f]
+            if f.running() and getattr(f, "_ld_t", None) is None:
+                f._ld_t = now  # quando ha iniziato davvero (le altre aspettano un posto libero)
+            if getattr(f, "_ld_t", None) and now - f._ld_t > STATUS_TIMEOUT:
+                STATE["statuses"][t.id] = None
+                slow.append("%s BLOCCATA" % t.id)
+                pending.discard(f)
+                done_n += 1
+        if job:
+            job.msg("Controllo impostazioni: %d/%d" % (done_n, len(todo)))
+    pool.shutdown(wait=False)
+    if slow:
         try:
-            STATE["statuses"][t.id] = t.status()
-        except Exception:
-            STATE["statuses"][t.id] = None
+            with open(paths.data("avvio_lento.log"), "a", encoding="utf-8") as fh:
+                fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + ", ".join(slow) + "\n")
+        except OSError:
+            pass
 
 
 def job_update(job):
@@ -260,6 +303,7 @@ def job_boot(job, hw=None):
     job.msg("Leggo le impostazioni del sistema..." if hw else "Primo avvio: leggo l'hardware del PC...")
     info, probs = checks.run_all(hw)
     STATE["sysinfo"] = info
+    STATE["hw_cached"] = True  # da qui l'interfaccia puo' aprirsi: il resto continua in background
     tweaks.CONTEXT.update(refresh_hz=info.get("refresh_hz"), vendor=(info.get("gpu") or {}).get("vendor"))
     job.msg("Leggo le impostazioni del driver video...")
     drv = driver_report()
@@ -455,8 +499,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(500, {"error": str(e)})
 
     def do_POST(self):
-        STATE["last_req"] = time.time()
         u = urlparse(self.path)
+        if u.path == "/api/bye":  # la finestra e' stata chiusa (inviato dal browser senza intestazioni)
+            if secrets.compare_digest(parse_qs(u.query).get("t", [""])[0], TOKEN):
+                STATE["bye"] = time.time()
+            return self._send(204, b"", "text/plain")
+        STATE["last_req"] = time.time()
         if not secrets.compare_digest(self.headers.get("X-Token", ""), TOKEN):
             return self._send(403, {"error": "token"})
         try:
@@ -692,17 +740,30 @@ def _existing_instance():
 
 def _auto_exit():
     """Versione installata (senza finestra nera): quando chiudi la finestra di LagDoctor, il programma si chiude.
-    Se la finestra si chiude subito (Edge l'ha passata a un'altra istanza) uso il battito dell'interfaccia."""
+
+    Non si guarda il processo di Edge: quando LagDoctor e' amministratore, Edge si riavvia da solo senza permessi e
+    il processo avviato termina subito (prima di questa correzione LagDoctor si chiudeva dopo pochi secondi).
+    - la pagina, quando viene chiusa, manda un saluto (/api/bye): se entro 8 secondi non arriva altro, mi chiudo
+      (8 secondi: se la pagina era solo ricaricata, nel frattempo richiede di nuovo i dati)
+    - riserva: nessun contatto dalla pagina per 10 minuti (la pagina manda un battito ogni 20 secondi)
+    - se il PC e' stato in sospensione, il conteggio riparte."""
     STATE["last_req"] = time.time()
+    last_loop = time.time()
     while True:
-        time.sleep(3)
-        w = STATE.get("window")
-        if w is not None and w.poll() is not None and time.time() - STATE.get("window_t", 0) > 8:
-            break
-        if time.time() - STATE.get("last_req", time.time()) > 240:  # nessun contatto per 4 minuti
-            break
+        time.sleep(2)
+        now = time.time()
+        if now - last_loop > 30:  # il PC si e' appena risvegliato dalla sospensione
+            STATE["last_req"] = now
+            STATE["bye"] = None
+        last_loop = now
         if STATE["busy"] and JOBS.get(STATE["busy"]) and JOBS[STATE["busy"]].status == "running":
-            STATE["last_req"] = time.time()  # mai chiudere durante un'operazione
+            STATE["last_req"] = now  # mai chiudere durante un'operazione
+            continue
+        bye = STATE.get("bye")
+        if bye and now - bye > 8 and STATE["last_req"] <= bye + 0.5:
+            break
+        if now - STATE["last_req"] > 600:
+            break
     _shutdown()
 
 
@@ -731,17 +792,20 @@ def _minimize_later(proc, seconds=25):
         return
     end = time.time() + seconds
     while time.time() < end:
-        try:
-            pids = {proc.pid} | {c.pid for c in psutil.Process(proc.pid).children(recursive=True)}
-        except psutil.Error:
-            pids = {proc.pid}
         found = []
 
         def cb(h, _l):
-            if u32.IsWindowVisible(h) and u32.GetWindowTextLengthW(h) > 0:
+            n = u32.GetWindowTextLengthW(h)
+            if u32.IsWindowVisible(h) and n > 0:
+                buf = ctypes.create_unicode_buffer(n + 1)
+                u32.GetWindowTextW(h, buf, n + 1)
                 pid = wintypes.DWORD()
                 u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-                if pid.value in pids:
+                try:
+                    is_edge = psutil.Process(pid.value).name().lower() == "msedge.exe"
+                except psutil.Error:
+                    is_edge = False
+                if is_edge and buf.value.strip() == "LagDoctor":
                     found.append(h)
             return True
         u32.EnumWindows(proto(cb), 0)

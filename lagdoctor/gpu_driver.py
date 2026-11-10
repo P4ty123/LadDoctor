@@ -600,8 +600,16 @@ def amd_analyze(raw, refresh_hz=None):
 _CACHE = {"t": 0, "data": None}
 
 
+_LOCK = __import__("threading").RLock()
+
+
 def read(vendor, refresh_hz=None, max_age=3):
-    """Legge e analizza le impostazioni del driver della scheda dedicata."""
+    """Legge e analizza le impostazioni del driver della scheda dedicata (una lettura alla volta)."""
+    with _LOCK:
+        return _read(vendor, refresh_hz, max_age)
+
+
+def _read(vendor, refresh_hz=None, max_age=3):
     if _CACHE["data"] and time.time() - _CACHE["t"] < max_age and _CACHE["data"].get("vendor") == vendor:
         return _CACHE["data"]
     if vendor == "nvidia":

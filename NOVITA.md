@@ -1,3 +1,14 @@
+## LagDoctor 5.7.2 - correzioni importanti per la versione installata
+
+- **Corretto: LagDoctor si chiudeva da solo pochi secondi dopo l'avvio** (blocco su "Controllo impostazioni" e
+  errore "Failed to fetch" negli aggiornamenti). Edge, avviato da un programma amministratore, si riavvia da solo e
+  LagDoctor pensava che la finestra fosse stata chiusa. Ora si chiude solo quando chiudi davvero la finestra.
+- Corretto: i comandi di PowerShell avviati dalla versione installata potevano caricare librerie sbagliate e
+  bloccarsi (es. controlli delle schede di rete).
+- Controllo delle impostazioni piu' veloce (6 alla volta) e mai bloccato: una voce che non risponde entro 25 secondi
+  diventa "non verificabile" e le altre vanno avanti (elenco in C:\ProgramData\LagDoctor\avvio_lento.log).
+- Primo avvio: l'interfaccia si apre appena letto l'hardware, il resto continua in background.
+
 ## LagDoctor 5.7.1
 
 - Primo avvio della versione installata: LagDoctor trova da solo la cartella della versione precedente (quella con

@@ -897,7 +897,8 @@ async function settingsDialog() {
 }
 $("#btn-settings").onclick = settingsDialog;
 /* battito: la versione installata si chiude da sola quando chiudi la finestra */
-setInterval(() => { api("/api/ping").catch(() => {}); }, 60000);
+setInterval(() => { api("/api/ping").catch(() => {}); }, 20000);
+window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(window.LD_TOKEN), ""); } catch (e) { /* niente */ } });
 
 /* ------------------------------------------------------------------ avvio */
 function bootCardHtml() {
@@ -937,7 +938,16 @@ async function backgroundBoot(job) {
       setTimeout(() => checkUpdates(false), 4000);
       return;
     }
-    await runJob(Promise.resolve(job), (j) => logList($("#boot-log"), j.messages)); /* primo avvio */
+    /* primo avvio: aspetto solo la lettura dell'hardware, poi il resto continua in background */
+    let j = job;
+    while (j.status === "running") {
+      await new Promise((r) => setTimeout(r, 700));
+      j = await api("/api/job?id=" + j.id);
+      logList($("#boot-log"), j.messages);
+      const s3 = await api("/api/state");
+      if (s3.hw_cached && j.status === "running") { S.bootMsg = j.messages[j.messages.length - 1]; backgroundBoot(j); break; }
+    }
+    if (j.status === "error") throw new Error(j.error);
     go("home");
     setTimeout(() => checkUpdates(false), 4000);
   } catch (e) {

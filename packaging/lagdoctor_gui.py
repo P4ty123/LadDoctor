@@ -12,7 +12,20 @@ if not getattr(sys, "frozen", False):  # avviato da sorgente: la cartella del pr
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+def _fix_child_dll_path():
+    """PyInstaller fa cercare le DLL nella sua cartella _internal e i programmi avviati da LagDoctor (PowerShell,
+    powercfg...) ereditano questa impostazione: possono caricare librerie sbagliate e bloccarsi (es. i comandi di
+    rete di PowerShell). La riporto al normale: i moduli di LagDoctor sono gia' caricati."""
+    if getattr(sys, "frozen", False) and os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+        except Exception:
+            pass
+
+
 def main():
+    _fix_child_dll_path()
     args = sys.argv[1:]
     if args[:1] == ["--gamemode"]:
         from lagdoctor import gamemode

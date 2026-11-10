@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+build/
+dist/
+# dati creati dal programma quando lo si avvia dalla cartella sorgente
+report/
+autodiagnosi/
+*.json
+*.log
+*.flag
+.migrato
+strumenti/finestra/
+strumenti/*.pyw
+errore.txt

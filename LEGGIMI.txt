@@ -1,0 +1,53 @@
+LagDoctor - come si usa
+=======================
+
+AVVIO
+1. Estrai questa cartella dove vuoi (es. sul Desktop).
+2. Doppio clic su AVVIA.bat e premi "Si" ai permessi di amministratore.
+   - La prima volta, se manca Python, lo installa da solo: chiudi e riapri AVVIA.bat.
+   - Se compare "Windows ha protetto il PC": "Ulteriori informazioni" > "Esegui comunque".
+3. Si apre la finestra di LagDoctor. La finestra nera resta aperta dietro: NON chiuderla
+   finche' usi il programma (chiuderla = uscire).
+
+SEZIONI
+- Panoramica: sensori della scheda video in tempo reale, il tuo PC, cosa fare per primo.
+- Scansione: legge tutto il PC (hardware, Windows, driver, dischi, rete, errori, app preinstallate,
+  impostazioni del driver video e di ogni voce delle Ottimizzazioni).
+- Ottimizzazioni: oltre 140 voci, ognuna con: a cosa serve, perche' cambiarla, possibili problemi.
+  Filtri: Da correggere, Non attive, Consigliate, Attive, Non affidabili, Tutte.
+  Categorie: correzioni, driver NVIDIA/AMD, gioco, CPU ed energia (anche Timer Resolution
+  automatico), memoria e disco, rete, interfaccia, sicurezza, Debloat (app preinstallate) e
+  Non affidabili (i 'miti': attivabili per provarli, ma spiegati e sconsigliati).
+  Le voci gia' attive non si riattivano: se le ha applicate LagDoctor c'e' il pulsante Annulla.
+- Driver video: impostazioni del Pannello NVIDIA o di AMD Adrenalin, con giudizio e correzioni.
+- Avvio automatico: interruttori per i programmi che partono con Windows.
+- Analizza gioco: schede Registra, Prima / Dopo e Sessioni. Dopo la registrazione LagDoctor
+  mostra le cause degli stutter E le impostazioni del tuo PC collegate a quelle cause
+  (quelle attive che peggiorano e quelle che potrebbero aiutare).
+- Riavvio: quando una modifica richiede il riavvio compare una barra in alto con 'Riavvia ora';
+  sparisce da sola dopo il riavvio.
+- Ripristina tutto (in basso a sinistra): annulla ogni modifica fatta da LagDoctor.
+
+AVVIA_TESTO.bat apre la vecchia versione a riga di comando.
+
+Se qualcosa va storto: Ripristino configurazione di sistema > punto "LagDoctor".
+Se compare un errore: manda il file errore.txt che trovi in C:\ProgramData\LagDoctor.
+Il programma NON modifica il gioco e non si inserisce nel gioco (nessun rischio di ban).
+
+AUTODIAGNOSI.bat (programma separato, SOLA LETTURA)
+  Controlla che ogni funzione di LagDoctor funzioni su questo PC senza cambiare niente:
+  tutte le funzioni di modifica vengono bloccate prima di iniziare. Dura 2-5 minuti.
+  Alla fine crea un file autodiagnosi-....zip nella cartella "autodiagnosi": e' quello da mandare.
+
+GAME MODE (pagina "Game mode")
+  Trova i giochi installati (Steam, Epic, GOG, Xbox/Game Pass, Ubisoft, EA, Battle.net, Riot, Minecraft).
+  Quando apri un gioco: priorita' CPU/GPU/rete al gioco, programmi in background a priorita' bassa,
+  servizi e componenti inutili fermati (come la modalita' Xbox), RAM liberata, timer a 0,5 ms.
+  Quando lo chiudi tutto torna com'era. Parte da sola con Windows; si spegne dalla stessa pagina.
+  Diario delle attivita': gamemode.log
+
+VERSIONE INSTALLABILE
+  Scarica LagDoctor-Setup.exe da https://github.com/P4ty123/LadDoctor/releases/latest
+  Si aggiorna da solo (pulsante "Aggiornamenti"). I dati sono in C:\ProgramData\LagDoctor:
+  restano dopo aggiornamenti e reinstallazioni. AVVIA.bat continua a funzionare e usa gli stessi dati.
+  Impostazioni: avvio con Windows, anche ridotto a icona.

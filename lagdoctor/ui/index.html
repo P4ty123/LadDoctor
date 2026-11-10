@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LagDoctor</title>
+<link rel="stylesheet" href="/ui/style.css">
+<script>window.LD_TOKEN = "__TOKEN__";</script>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo">LD</span><div><b>LagDoctor</b><small>stutter &amp; lag <span id="app-ver"></span></small></div></div>
+    <nav id="nav">
+      <a data-page="home" class="active"><i>&#9673;</i>Panoramica</a>
+      <a data-page="scan"><i>&#9906;</i>Scansione<span class="nav-spin" id="nav-scan-spin" hidden title="Scansione delle impostazioni in corso"></span></a>
+      <a data-page="tweaks"><i>&#9881;</i>Ottimizzazioni<span class="pill" id="nav-fix" hidden></span></a>
+      <a data-page="driver"><i>&#9636;</i>Driver video</a>
+      <a data-page="startup"><i>&#9211;</i>Avvio automatico</a>
+      <a data-page="gamemode"><i>&#9654;</i>Game mode<span class="pill" id="nav-gm" hidden>ON</span></a>
+      <a data-page="record"><i>&#9679;</i>Analizza gioco<span class="pill warn" id="nav-exp" hidden>test</span></a>
+    </nav>
+    <div class="side-foot">
+      <button class="ghost sm" id="btn-settings">Impostazioni</button>
+      <button class="ghost sm" id="btn-update">Aggiornamenti<span class="pill" id="nav-upd" hidden>nuovo</span></button>
+      <button class="ghost sm" id="btn-folder">Cartella report</button>
+      <button class="ghost sm danger" id="btn-restore">Ripristina tutto</button>
+      <button class="ghost sm" id="btn-quit">Esci</button>
+    </div>
+  </aside>
+  <div class="content">
+    <div id="update-bar" class="reboot-bar upd-bar" hidden></div>
+    <div id="reboot-bar" class="reboot-bar" hidden></div>
+    <main id="main"><div class="loading"><div class="spinner"></div><p>Avvio di LagDoctor, controllo il PC...</p><ul id="boot-log" class="log"></ul></div></main>
+  </div>
+</div>
+<div id="modal" class="modal" hidden><div class="modal-card" id="modal-card"></div></div>
+<div id="toast" class="toast" hidden></div>
+<script src="/ui/app.js"></script>
+</body>
+</html>

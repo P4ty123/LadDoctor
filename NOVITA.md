@@ -1,3 +1,8 @@
+## LagDoctor 5.8.1
+
+- Corrette le linee chiare che lampeggiavano su alcuni riquadri (es. game mode e memoria video): erano causate
+  dall'effetto "vetro" sfocato insieme allo sfondo sfumato fisso. L'aspetto resta lo stesso.
+
 ## LagDoctor 5.8.0 - nuova grafica
 
 - Nuovo stile "gaming neon": sfondo scuro con riflessi viola e azzurri, riquadri in vetro, pulsanti con sfumatura,

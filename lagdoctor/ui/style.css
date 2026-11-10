@@ -13,8 +13,11 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--fg);font:14px/1.5 Inter,"Segoe UI Variable","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;
-  background-image:radial-gradient(900px 520px at 88% -12%,rgba(124,92,255,.22),transparent 60%),radial-gradient(760px 460px at 8% 112%,rgba(0,212,255,.13),transparent 60%);background-attachment:fixed}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 Inter,"Segoe UI Variable","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+/* sfumature di sfondo su un livello fisso a parte: niente "background-attachment:fixed" ne' sfocature (in Edge su
+   Windows, insieme ai sensori che si aggiornano ogni secondo, facevano comparire linee che lampeggiano) */
+body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(900px 520px at 88% -12%,rgba(124,92,255,.22),transparent 60%),radial-gradient(760px 460px at 8% 112%,rgba(0,212,255,.13),transparent 60%)}
 button,input,select{font:inherit;color:inherit}
 ::selection{background:rgba(124,92,255,.45)}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
@@ -22,7 +25,7 @@ button,input,select{font:inherit;color:inherit}
 .app{display:grid;grid-template-columns:236px 1fr;height:100vh}
 
 /* barra laterale */
-.side{background:var(--side);backdrop-filter:blur(20px);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 12px}
+.side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 12px}
 .brand{display:flex;gap:11px;align-items:center;padding:2px 8px 22px}
 .brand b{display:block;font-size:16px;letter-spacing:.2px}.brand small{color:var(--mut);font-size:11.5px}
 .logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--a1),var(--a2));display:grid;place-items:center;font-weight:800;font-size:13px;box-shadow:0 0 24px rgba(124,92,255,.55)}
@@ -51,7 +54,7 @@ h3{font-size:15px}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .grow{flex:1}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;backdrop-filter:blur(12px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
 .kpi small{color:var(--mut);display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px}
 .kpi b{display:block;font-size:15px;margin-top:5px;word-break:break-word}
 .kpi.big b{font-size:28px}
@@ -110,7 +113,7 @@ input:focus,select:focus{border-color:var(--a2);box-shadow:0 0 0 3px rgba(0,212,
 @media (max-width:1000px){.doc{grid-template-columns:1fr}}
 .drv-row{cursor:pointer}.drv-row:hover td{background:var(--card)}
 .drv-doc td{background:rgba(255,255,255,.025);padding:12px 14px}
-.bar{position:fixed;left:236px;right:0;bottom:0;background:rgba(10,11,20,.9);border-top:1px solid var(--line);padding:12px 36px;display:flex;gap:12px;align-items:center;backdrop-filter:blur(14px)}
+.bar{position:fixed;left:236px;right:0;bottom:0;background:rgba(10,11,20,.97);border-top:1px solid var(--line);padding:12px 36px;display:flex;gap:12px;align-items:center}
 
 /* interruttori e righe */
 .switch{position:relative;width:40px;height:22px;flex:none}
@@ -129,7 +132,7 @@ input:focus,select:focus{border-color:var(--a2);box-shadow:0 0 0 3px rgba(0,212,
 .loading{display:grid;place-items:center;align-content:center;min-height:70vh;text-align:center}
 .spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--a2);border-right-color:var(--a1);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.modal{position:fixed;inset:0;background:rgba(3,4,10,.7);backdrop-filter:blur(4px);display:grid;place-items:center;z-index:10}
+.modal{position:fixed;inset:0;background:rgba(3,4,10,.78);display:grid;place-items:center;z-index:10}
 .modal[hidden]{display:none}
 .modal-card{background:linear-gradient(180deg,#14152a,#0d0e18);border:1px solid var(--line2);border-radius:18px;padding:24px;width:min(640px,92vw);max-height:86vh;overflow:auto;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px rgba(124,92,255,.15)}
 .modal-card h2{margin-top:0;font-size:18px;text-transform:none;letter-spacing:0;color:var(--fg)}

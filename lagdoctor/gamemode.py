@@ -77,7 +77,7 @@ OPTIONS = [
      "I file non si sincronizzano mentre giochi."),
     ("stop_services", True, "Ferma i servizi non necessari",
      "Ferma temporaneamente indicizzazione della ricerca, SysMain (Superfetch), telemetria, segnalazione errori, "
-     "mappe offline e Assistente compatibilita' programmi. Ripartono quando chiudi il gioco.",
+     "mappe offline. Ripartono quando chiudi il gioco.",
      "La ricerca di Windows puo' essere piu' lenta durante il gioco."),
     ("stop_updates", True, "Blocca aggiornamenti e download in background",
      "Ferma Windows Update, BITS, Ottimizzazione recapito e gli aggiornamenti di Edge, Google, Firefox e Adobe: "
@@ -109,7 +109,8 @@ APPS = ["widgets.exe", "widgetservice.exe", "phoneexperiencehost.exe", "yourphon
 SHELL = ["explorer.exe", "startmenuexperiencehost.exe", "searchhost.exe", "shellexperiencehost.exe",
          "widgets.exe"]
 SERVICES = {
-    "stop_services": ["WSearch", "SysMain", "DiagTrack", "WerSvc", "MapsBroker", "PcaSvc"],
+    # PcaSvc non c'e': Windows lo riavvia a ogni programma che si apre, fermarlo non serve
+    "stop_services": ["WSearch", "SysMain", "DiagTrack", "WerSvc", "MapsBroker"],
     "stop_updates": ["wuauserv", "UsoSvc", "BITS", "DoSvc", "edgeupdate", "edgeupdatem", "gupdate", "gupdatem",
                      "MozillaMaintenance", "AdobeARMservice"],
 }
@@ -435,6 +436,7 @@ class Engine:
         self.my_user = None
         self.bg_seen = {}  # pid -> create_time gia' valutati (per non rileggere tutto a ogni controllo)
         self.new_ac_exes = []  # (id gioco, exe, anti-cheat) da salvare nella configurazione
+        self.game_seen = set()  # pid dei giochi gia' visti (anche durante l'attesa per l'anti-cheat)
         try:
             self.cpu = cputopo.decide()
         except Exception:
@@ -536,7 +538,8 @@ class Engine:
     def _user_bg(self, only_new=False):
         """Processi dell'utente in background (non protetti, non giochi)."""
         for p in psutil.process_iter(["pid", "name"]):
-            if p.pid in self.game_pids or p.pid == os.getpid() or _protected(p.info["name"]):
+            if p.pid in self.game_pids or p.pid in self.game_seen or p.pid == os.getpid() or \
+                    _protected(p.info["name"]):
                 continue
             if only_new:
                 try:
@@ -848,6 +851,7 @@ class Watcher:
             if not e.active:
                 e.activate(opts, sorted({g["name"] for _, g in running.values()}))
                 self.write_status([], force=True)
+            e.game_seen = set(running)  # mai abbassare la priorita' di un gioco, nemmeno nell'attesa iniziale
             for pid, (p, g) in running.items():
                 if pid not in e.game_pids:
                     try:  # l'anti-cheat puo' partire qualche secondo dopo il gioco: aspetto prima di toccarlo
@@ -1139,7 +1143,8 @@ def verify():
     restops = j.get("restops") or {}
     for name in j.get("services") or []:
         s = _service_state(name)
-        again = " (ripartito da solo %d volte: fermato di nuovo)" % restops[name] if restops.get(name) else ""
+        n_re = restops.get(name, 0)
+        again = (" (ripartito da solo %d %s: fermato di nuovo)" % (n_re, "volta" if n_re == 1 else "volte")) if n_re else ""
         if s == "stopped":
             add("Servizi in pausa", name, True, "fermo" + again)
         elif s is None:
@@ -1157,8 +1162,11 @@ def verify():
     # ---------------- programmi in background (raggruppati per nome)
     if opts.get("bg_priority"):
         groups = {}
+        game_pids = {int(x) for x in (st.get("procs") or {})}
         for key, rec in (j.get("bg") or {}).items():
             ct = rec[0]
+            if int(key) in game_pids:
+                continue
             try:
                 p = psutil.Process(int(key))
                 if abs(p.create_time() - ct) >= 1:
@@ -1169,10 +1177,18 @@ def verify():
                 g[1] += p.nice() == 0x4000
             except (psutil.Error, ValueError, IndexError):
                 continue
+        browsers = ("msedge.exe", "chrome.exe", "firefox.exe", "brave.exe", "opera.exe", "opera_gx.exe",
+                    "vivaldi.exe", "msedgewebview2.exe")
         for name in sorted(groups, key=str.lower):
             tot, low = groups[name]
-            add("Programmi a priorita' bassa", name + (" ×%d" % tot if tot > 1 else ""), low == tot,
-                "Inferiore al normale" if low == tot else "%d su %d" % (low, tot))
+            label = name + (" ×%d" % tot if tot > 1 else "")
+            if low == tot:
+                add("Programmi a priorita' bassa", label, True, "Inferiore al normale")
+            elif name.lower() in browsers:
+                add("Programmi a priorita' bassa", label, None,
+                    "%d su %d: il browser regola da solo la priorita' delle sue schede" % (low, tot))
+            else:
+                add("Programmi a priorita' bassa", label, False, "%d su %d (il programma ha cambiato da solo la sua priorita')" % (low, tot))
         if not groups:
             add("Programmi a priorita' bassa", "Programmi in background", None, "nessun programma da abbassare")
     # ---------------- sistema e rete

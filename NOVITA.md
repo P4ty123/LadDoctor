@@ -1,3 +1,10 @@
+## LagDoctor 5.10.2
+
+- Game mode: corretto il gioco che per qualche secondo all'avvio veniva messo a priorita' bassa insieme ai programmi
+  in background (prima che la game mode gli desse la priorita' Alta).
+- Tolto PcaSvc dai servizi da fermare: Windows lo riavvia a ogni programma che si apre.
+- Verifica: i browser (Edge, Chrome...) che cambiano da soli la priorita' delle schede sono segnati come "da sapere".
+
 ## LagDoctor 5.10.1
 
 - Game mode: i servizi di Windows Update (wuauserv, UsoSvc) che Windows fa ripartire da solo vengono fermati di

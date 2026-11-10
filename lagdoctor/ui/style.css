@@ -161,8 +161,8 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .fac .it{display:flex;gap:10px;align-items:flex-start}.fac .it p{margin:2px 0 0;color:var(--mut);font-size:13px}
 
 /* panoramica: sensori, punteggio, game mode */
-.sensors{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:14px}
-@media (max-width:1150px){.sensors{grid-template-columns:repeat(3,1fr)}}
+.sensors{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+@media (max-width:1100px){.sensors{grid-template-columns:repeat(2,1fr)}}
 .sensors .card{padding:15px 17px}
 .sensors b{font-size:24px;font-weight:700;display:block;margin-top:4px}
 .sensors .meter{height:5px;border-radius:5px;background:rgba(255,255,255,.07);margin-top:11px;overflow:hidden}

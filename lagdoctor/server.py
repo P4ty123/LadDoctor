@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import psutil
 
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
-from . import __version__, cputemp, settings, tray, updater
+from . import __version__, pdh, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
 
@@ -728,16 +728,49 @@ def _shutdown():
     SERVER.shutdown()
 
 
+_CPU = {"q": None, "times": None}
+_CPU_LOCK = threading.Lock()
+
+
+def _cpu_util():
+    with _CPU_LOCK:  # una lettura alla volta (le richieste della pagina arrivano da thread diversi)
+        return _cpu_util_locked()
+
+
+def _cpu_util_locked():
+    """Utilizzo della CPU come in Gestione attivita' ('% utilita' processore' di Windows).
+    Riserva: calcolo dai tempi della CPU tra una lettura e l'altra (sempre i miei, non quelli condivisi di psutil)."""
+    q = _CPU["q"]
+    if q is None:
+        q = _CPU["q"] = pdh.Query({"util": r"\Processor Information(_Total)\% Processor Utility",
+                                   "time": r"\Processor Information(_Total)\% Processor Time"})
+        q.collect()
+        time.sleep(0.25)
+    if q.ok:
+        v = q.collect()
+        val = v.get("util", v.get("time"))
+        if isinstance(val, (int, float)):
+            return max(0.0, min(100.0, val))
+    t = psutil.cpu_times()
+    prev, _CPU["times"] = _CPU["times"], t
+    if prev is None:
+        time.sleep(0.25)
+        prev, t = t, psutil.cpu_times()
+        _CPU["times"] = t
+    tot = sum(t) - sum(prev)
+    idle = t.idle - prev.idle
+    return max(0.0, min(100.0, 100.0 * (1 - idle / tot))) if tot > 0 else None
+
+
 def _sys_sensors():
-    """CPU e RAM per la Panoramica (la temperatura della CPU arriva da un thread a parte)."""
+    """CPU e RAM per la Panoramica."""
     vm = psutil.virtual_memory()
-    t = STATE.get("cpu_temp")
-    if t is None:
-        t = STATE["cpu_temp"] = cputemp.CpuTemp()
-        t.start()
-    t.last_read = time.time()
-    return {"cpu_util": psutil.cpu_percent(interval=None), "ram_used": (vm.total - vm.available) / 2**30,
-            "ram_total": vm.total / 2**30, "ram_pct": vm.percent, "cpu_temp": t.value, "cpu_temp_src": t.source}
+    try:
+        cpu = _cpu_util()
+    except Exception:
+        cpu = None
+    return {"cpu_util": cpu, "ram_used": (vm.total - vm.available) / 2**30, "ram_total": vm.total / 2**30,
+            "ram_pct": vm.percent}
 
 
 def _sensor_reaper():
@@ -748,10 +781,7 @@ def _sensor_reaper():
         if m is not None and time.time() - getattr(m, "last_read", 0) > 15:
             m.stop()
             STATE["sensor"] = None
-        t = STATE.get("cpu_temp")
-        if t is not None and time.time() - t.last_read > 15:
-            t.stop()
-            STATE["cpu_temp"] = None
+
 
 
 INSTANCE = None  # file con indirizzo e processo del LagDoctor gia' aperto

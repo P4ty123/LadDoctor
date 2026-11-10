@@ -1,3 +1,8 @@
+## LagDoctor 5.9.2
+
+- Corretto l'utilizzo della CPU che restava sempre a 0: ora viene letto come in Gestione attivita'.
+- Tolto il riquadro della temperatura della CPU.
+
 ## LagDoctor 5.9.1
 
 - Panoramica: al posto di memoria video e frequenza della scheda video ci sono utilizzo CPU, temperatura CPU e

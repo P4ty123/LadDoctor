@@ -60,7 +60,7 @@ def main():
         import importlib
         from lagdoctor import paths
         for m in ("server", "gamemode", "capture", "stutter", "analysis", "tweaks", "extra_tweaks", "driver_tweaks",
-                  "gpu_driver", "scan", "checks", "updater", "cputopo", "games", "virt_tweak", "tray", "cputemp", "settings"):
+                  "gpu_driver", "scan", "checks", "updater", "cputopo", "games", "virt_tweak", "tray", "settings"):
             importlib.import_module("lagdoctor." + m)
         from lagdoctor import server, capture, __version__
         need = [os.path.join(server.UI_DIR, f) for f in ("index.html", "app.js", "style.css")]

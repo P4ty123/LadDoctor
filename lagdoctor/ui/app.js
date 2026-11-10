@@ -177,7 +177,6 @@ const SENSOR_MAIN = [
   ["gpu_util", "Utilizzo GPU", "g", (d) => fmt(d.gpu_util) + "%", (d) => d.gpu_util],
   ["gpu_temp", "Temperatura GPU", "g", (d) => fmt(d.gpu_temp) + " °C" + (d.gpu_hotspot != null ? ` <span class="mut" style="font-size:13px;font-weight:500">hotspot ${fmt(d.gpu_hotspot)}</span>` : ""), (d) => Math.min(100, d.gpu_temp / 0.9), (d) => d.gpu_temp >= 83],
   ["cpu_util", "Utilizzo CPU", "s", (d) => fmt(d.cpu_util) + "%", (d) => d.cpu_util],
-  ["cpu_temp", "Temperatura CPU", "s", (d) => fmt(d.cpu_temp) + " °C", (d) => Math.min(100, d.cpu_temp / 0.95), (d) => d.cpu_temp >= 90],
   ["ram_used", "Utilizzo RAM", "s", (d) => fmt(d.ram_pct) + "%", (d) => d.ram_pct, (d) => d.ram_pct >= 90],
 ];
 function startSensors(box) {
@@ -196,10 +195,6 @@ function startSensors(box) {
         const p = v == null ? null : pct(d);
         m.style.visibility = p == null ? "hidden" : "visible";
         if (p != null) { $("span", m).style.width = Math.max(2, Math.min(100, p)) + "%"; m.classList.toggle("hot", !!(hot && hot(d))); }
-        if (k === "cpu_temp") {
-          n.textContent = v == null ? "Windows non la fornisce: apri LibreHardwareMonitor per leggerla" : (sd.cpu_temp_src && /ACPI/.test(sd.cpu_temp_src) ? "sensore della scheda madre (indicativo)" : "");
-          n.title = sd.cpu_temp_src || "Windows non ha un modo standard per leggere la temperatura della CPU. Se tieni aperto LibreHardwareMonitor (gratuito), LagDoctor la legge da li'.";
-        }
         if (k === "ram_used" && v != null) n.textContent = `${fmt(d.ram_used, 1).replace(".", ",")} GB usati su ${fmt(d.ram_total, 0)} GB`;
         if (src === "g" && !r.available) n.textContent = k === "gpu_util" ? "sensori della scheda video non leggibili" : "";
       });

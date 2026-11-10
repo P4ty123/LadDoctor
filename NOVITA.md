@@ -1,3 +1,10 @@
+## LagDoctor 5.9.1
+
+- Panoramica: al posto di memoria video e frequenza della scheda video ci sono utilizzo CPU, temperatura CPU e
+  utilizzo RAM (restano utilizzo e temperatura della GPU).
+- Temperatura CPU: Windows non la fornisce direttamente. LagDoctor la legge da LibreHardwareMonitor se e' aperto
+  (preciso), altrimenti dal sensore ACPI della scheda madre (indicativo; se e' un valore fisso non viene mostrato).
+
 ## LagDoctor 5.9.0
 
 - Icona di LagDoctor vicino all'orologio (in basso a destra). Chiudendo la finestra con la X il programma resta

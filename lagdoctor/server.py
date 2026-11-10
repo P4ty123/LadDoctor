@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import psutil
 
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
-from . import __version__, settings, tray, updater
+from . import __version__, cputemp, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
 
@@ -593,7 +593,7 @@ class Handler(BaseHTTPRequestHandler):
                     m.start()
                 STATE["sensor"] = m
             m.last_read = time.time()
-            return {"available": m.available, "data": m.latest}
+            return {"available": m.available, "data": m.latest, "sys": _sys_sensors()}
         return {"error": "sconosciuto"}
 
     # ------------------------------------------------------------------ POST
@@ -728,6 +728,18 @@ def _shutdown():
     SERVER.shutdown()
 
 
+def _sys_sensors():
+    """CPU e RAM per la Panoramica (la temperatura della CPU arriva da un thread a parte)."""
+    vm = psutil.virtual_memory()
+    t = STATE.get("cpu_temp")
+    if t is None:
+        t = STATE["cpu_temp"] = cputemp.CpuTemp()
+        t.start()
+    t.last_read = time.time()
+    return {"cpu_util": psutil.cpu_percent(interval=None), "ram_used": (vm.total - vm.available) / 2**30,
+            "ram_total": vm.total / 2**30, "ram_pct": vm.percent, "cpu_temp": t.value, "cpu_temp_src": t.source}
+
+
 def _sensor_reaper():
     """Spegne il monitor dei sensori se la pagina non lo legge piu'."""
     while True:
@@ -736,6 +748,10 @@ def _sensor_reaper():
         if m is not None and time.time() - getattr(m, "last_read", 0) > 15:
             m.stop()
             STATE["sensor"] = None
+        t = STATE.get("cpu_temp")
+        if t is not None and time.time() - t.last_read > 15:
+            t.stop()
+            STATE["cpu_temp"] = None
 
 
 INSTANCE = None  # file con indirizzo e processo del LagDoctor gia' aperto

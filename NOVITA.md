@@ -1,3 +1,9 @@
+## LagDoctor 5.7.7
+
+- Aggiornamento: la finestra della versione vecchia ora viene chiusa PRIMA di avviare l'installatore (prima
+  l'installatore chiudeva il programma troppo presto e la finestra restava aperta).
+- Il pulsante "Esci" chiude anche la finestra.
+
 ## LagDoctor 5.7.6
 
 - "Riduci i processi svchost": ora la soglia e' esattamente la RAM INSTALLATA in KB (32 GB = 2000000 esadecimale)

@@ -221,13 +221,12 @@ def job_update(job):
             last[0] = pct
             job.msg("Scarico LagDoctor %s... %d%%" % (info["latest"], pct))
     path = updater.download(info, prog)
-    job.msg("File controllato: integro. Avvio l'installazione (LagDoctor si chiude e si riapre da solo)...")
+    job.msg("File controllato: integro. Chiudo LagDoctor e installo: si riapre da solo tra circa un minuto...")
+    # PRIMA chiudo la finestra: l'installatore, appena parte, chiude subito il programma (prima non c'era tempo)
+    time.sleep(2)  # la pagina fa in tempo a mostrare il messaggio
+    _close_windows()
     updater.install(path)
-    def close_all():
-        time.sleep(3)          # la pagina fa in tempo a mostrare il messaggio e a chiudersi da sola
-        _close_windows()       # se non ci e' riuscita, la chiudo io
-        _shutdown()
-    threading.Thread(target=close_all, daemon=True).start()
+    threading.Thread(target=lambda: (time.sleep(1), _shutdown()), daemon=True).start()
     return {"msg": "Installazione avviata", "restarting": True}
 
 
@@ -681,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
             os.startfile(REPORTS)
             return 200, {"ok": True}
         elif path == "/api/quit":
-            threading.Thread(target=_shutdown, daemon=True).start()
+            threading.Thread(target=lambda: (time.sleep(0.8), _close_windows(2.0), _shutdown()), daemon=True).start()
             return 200, {"ok": True}
         else:
             return 404, {"error": "sconosciuto"}
@@ -814,14 +813,42 @@ def _lagdoctor_windows():
     return found
 
 
-def _close_windows():
-    """Chiude la finestra di LagDoctor (prima di un aggiornamento: la nuova versione ne apre una sua)."""
+def _window_processes():
+    """Processi di Edge che usano il profilo dedicato di LagDoctor (solo la finestra di LagDoctor, mai le altre)."""
+    profile = os.path.normcase(os.path.join(paths.DATA_TOOLS, "finestra"))
+    out = []
+    for p in psutil.process_iter(["name", "cmdline"]):
+        try:
+            if (p.info["name"] or "").lower() != "msedge.exe":
+                continue
+            cmd = os.path.normcase(" ".join(p.info["cmdline"] or []))
+            if profile in cmd:
+                out.append(p)
+        except psutil.Error:
+            continue
+    return out
+
+
+def _close_windows(wait=4.0):
+    """Chiude la finestra di LagDoctor: prima con gentilezza (WM_CLOSE), poi chiudendo i processi di Edge del suo
+    profilo dedicato se e' ancora aperta."""
     try:
         import ctypes
         for h in _lagdoctor_windows():
             ctypes.windll.user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
     except Exception:
         pass
+    end = time.time() + wait
+    while time.time() < end and _window_processes():
+        time.sleep(0.25)
+    procs = _window_processes()
+    for p in procs:
+        try:
+            p.terminate()
+        except psutil.Error:
+            pass
+    if procs:
+        psutil.wait_procs(procs, timeout=3)
 
 
 def _minimize_later(proc, seconds=25):

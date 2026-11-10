@@ -816,7 +816,7 @@ async function sessions() {
 
 /* ------------------------------------------------------------------ azioni globali */
 $("#btn-folder").onclick = () => api("/api/open_folder", {}).catch((e) => toast(e.message));
-$("#btn-quit").onclick = async () => { await api("/api/quit", {}).catch(() => {}); document.body.innerHTML = '<div class="loading"><p>LagDoctor e\' chiuso. Puoi chiudere questa finestra.</p></div>'; };
+$("#btn-quit").onclick = async () => { await api("/api/quit", {}).catch(() => {}); document.body.innerHTML = '<div class="loading"><p>Chiudo LagDoctor...</p></div>'; };
 $("#btn-restore").onclick = () => {
   const m = modal(`<h2>Ripristina tutto</h2><p>Annullo <b>tutte</b> le modifiche fatte da LagDoctor (impostazioni e programmi all'avvio) e riporto i valori originali.</p>
     <div class="row" style="justify-content:flex-end"><button class="ghost" id="m-cancel">Annulla</button><button class="red" id="m-ok">Ripristina</button></div>`);

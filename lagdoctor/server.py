@@ -223,7 +223,11 @@ def job_update(job):
     path = updater.download(info, prog)
     job.msg("File controllato: integro. Avvio l'installazione (LagDoctor si chiude e si riapre da solo)...")
     updater.install(path)
-    threading.Thread(target=lambda: (time.sleep(2), _shutdown()), daemon=True).start()
+    def close_all():
+        time.sleep(3)          # la pagina fa in tempo a mostrare il messaggio e a chiudersi da sola
+        _close_windows()       # se non ci e' riuscita, la chiudo io
+        _shutdown()
+    threading.Thread(target=close_all, daemon=True).start()
     return {"msg": "Installazione avviata", "restarting": True}
 
 
@@ -781,34 +785,55 @@ def _repair_timer():
     extra_tweaks.repair_timer()
 
 
-def _minimize_later(proc, seconds=25):
-    """Riduce a icona la finestra di LagDoctor appena compare (avvio con Windows 'ridotto a icona')."""
+def _lagdoctor_windows():
+    """Finestre di Edge con il titolo 'LagDoctor' (la finestra del programma)."""
     try:
         from ctypes import wintypes
         import ctypes
         u32 = ctypes.windll.user32
         proto = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
     except Exception:
+        return []
+    found = []
+
+    def cb(h, _l):
+        n = u32.GetWindowTextLengthW(h)
+        if u32.IsWindowVisible(h) and n > 0:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            u32.GetWindowTextW(h, buf, n + 1)
+            pid = wintypes.DWORD()
+            u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+            try:
+                is_edge = psutil.Process(pid.value).name().lower() == "msedge.exe"
+            except psutil.Error:
+                is_edge = False
+            if is_edge and buf.value.strip().startswith("LagDoctor"):
+                found.append(h)
+        return True
+    u32.EnumWindows(proto(cb), 0)
+    return found
+
+
+def _close_windows():
+    """Chiude la finestra di LagDoctor (prima di un aggiornamento: la nuova versione ne apre una sua)."""
+    try:
+        import ctypes
+        for h in _lagdoctor_windows():
+            ctypes.windll.user32.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
+    except Exception:
+        pass
+
+
+def _minimize_later(proc, seconds=25):
+    """Riduce a icona la finestra di LagDoctor appena compare (avvio con Windows 'ridotto a icona')."""
+    try:
+        import ctypes
+        u32 = ctypes.windll.user32
+    except Exception:
         return
     end = time.time() + seconds
     while time.time() < end:
-        found = []
-
-        def cb(h, _l):
-            n = u32.GetWindowTextLengthW(h)
-            if u32.IsWindowVisible(h) and n > 0:
-                buf = ctypes.create_unicode_buffer(n + 1)
-                u32.GetWindowTextW(h, buf, n + 1)
-                pid = wintypes.DWORD()
-                u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-                try:
-                    is_edge = psutil.Process(pid.value).name().lower() == "msedge.exe"
-                except psutil.Error:
-                    is_edge = False
-                if is_edge and buf.value.strip() == "LagDoctor":
-                    found.append(h)
-            return True
-        u32.EnumWindows(proto(cb), 0)
+        found = _lagdoctor_windows()
         if found:
             for h in found:
                 u32.ShowWindow(h, 7)  # SW_SHOWMINNOACTIVE: ridotta a icona, senza rubare lo stato attivo

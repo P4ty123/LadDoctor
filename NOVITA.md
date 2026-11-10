@@ -1,3 +1,8 @@
+## LagDoctor 5.7.4
+
+- Aggiornamento: la finestra della versione vecchia ora si chiude da sola, invece di restare aperta accanto a
+  quella nuova.
+
 ## LagDoctor 5.7.3
 
 - Pallino verde sul pulsante "Aggiornamenti" quando c'e' una versione nuova (anche con LagDoctor gia' aperto:

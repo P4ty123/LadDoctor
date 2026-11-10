@@ -865,7 +865,8 @@ async function updateDialog(u) {
     try {
       const job = await runJob(api("/api/update/install", {}), (j) => logList($("#upd-log", m), j.messages));
       if (job.result && job.result.restarting) {
-        m.innerHTML = '<h2>Installazione in corso...</h2><div class="spinner"></div><p>LagDoctor si chiude e si riapre da solo tra circa un minuto. Puoi chiudere questa finestra.</p>';
+        m.innerHTML = '<h2>Installazione in corso...</h2><div class="spinner"></div><p>Questa finestra si chiude ora: LagDoctor si riapre da solo, aggiornato, tra circa un minuto.</p>';
+        setTimeout(() => { try { window.close(); } catch (e) { /* ci pensa il programma */ } }, 1500);
       } else { toast(job.result && job.result.msg || "Fatto"); closeModal(); }
     } catch (e) { toast("Aggiornamento non riuscito: " + e.message, 9000); go.disabled = false; $("#m-close", m).disabled = false; go.textContent = "Riprova"; }
   };

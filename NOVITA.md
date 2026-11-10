@@ -1,3 +1,9 @@
+## LagDoctor 5.7.1
+
+- Primo avvio della versione installata: LagDoctor trova da solo la cartella della versione precedente (quella con
+  AVVIA.bat su Desktop, Download o Documenti) e ne copia i dati: le modifiche gia' applicate restano annullabili e
+  i report non si perdono.
+
 ## LagDoctor 5.7.0 - prima versione installabile
 
 - **Programma installabile**: LagDoctor-Setup.exe con icone nel menu Start e sul desktop, disinstallazione da

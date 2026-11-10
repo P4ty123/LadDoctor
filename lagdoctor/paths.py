@@ -38,20 +38,58 @@ def data(name):
     return os.path.join(DATA_DIR, name)
 
 
+def find_old_folders(max_depth=3):
+    """Cartelle della vecchia versione (avviata con AVVIA.bat) con dati da recuperare: Desktop, Download, Documenti."""
+    home = os.path.expanduser("~")
+    starts = [os.path.join(home, d) for d in ("Desktop", "Downloads", "Documents", "Documenti")]
+    starts += [os.path.join(home, "OneDrive", d) for d in ("Desktop", "Documents", "Documenti")]
+    found = []
+    for start in starts:
+        if not os.path.isdir(start):
+            continue
+        base = start.rstrip("\\/").count(os.sep)
+        for root, dirs, files in os.walk(start):
+            if root.count(os.sep) - base >= max_depth:
+                dirs[:] = []
+            if "AVVIA.bat" in files and os.path.isdir(os.path.join(root, "lagdoctor")) and \
+                    any(n in files for n in _OLD_FILES):
+                found.append(root)
+                dirs[:] = []
+    # la piu' recente per prima
+    found.sort(key=lambda d: max(os.path.getmtime(os.path.join(d, n)) for n in _OLD_FILES
+                                 if os.path.isfile(os.path.join(d, n))), reverse=True)
+    return found
+
+
 def migrate():
-    """Prima volta: copia i dati della vecchia versione (cartella del programma) nella cartella dati.
-    Copia e non sposta: i vecchi file restano dove sono, per sicurezza."""
+    """Prima volta: copia i dati della vecchia versione nella cartella dati.
+    Avvio con AVVIA.bat: dalla cartella del programma. Versione installata: dalla vecchia cartella trovata su
+    Desktop / Download / Documenti. Copia e non sposta: i vecchi file restano dove sono, per sicurezza."""
     os.makedirs(DATA_DIR, exist_ok=True)
     marker = data(".migrato")
-    if os.path.normcase(DATA_DIR) == os.path.normcase(SRC_ROOT) or os.path.exists(marker) or FROZEN:
+    if os.path.exists(marker):
         return False
+    if FROZEN:
+        if os.path.exists(data("modifiche_applicate.json")):
+            return False
+        try:
+            old = find_old_folders()
+        except OSError:
+            old = []
+        if not old:
+            return False
+        src_root = old[0]
+    elif os.path.normcase(DATA_DIR) == os.path.normcase(SRC_ROOT):
+        return False
+    else:
+        src_root = SRC_ROOT
     copied = False
     for n in _OLD_FILES:
-        src = os.path.join(SRC_ROOT, n)
+        src = os.path.join(src_root, n)
         if os.path.isfile(src) and not os.path.exists(data(n)):
             shutil.copy2(src, data(n))
             copied = True
-    old_rep = os.path.join(SRC_ROOT, "report")
+    old_rep = os.path.join(src_root, "report")
     if os.path.isdir(old_rep):
         os.makedirs(REPORTS, exist_ok=True)
         for n in os.listdir(old_rep):
@@ -60,7 +98,7 @@ def migrate():
                 shutil.copy2(s, d)
                 copied = True
     with open(marker, "w") as f:
-        f.write("dati copiati da " + SRC_ROOT)
+        f.write("dati copiati da " + src_root)
     return copied
 
 

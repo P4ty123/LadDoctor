@@ -27,10 +27,10 @@ Doppio clic su `AVVIA.bat` (installa Python e psutil se mancano).
 
 ## Come viene pubblicata una nuova versione
 
-1. Si aggiorna `__version__` in `lagdoctor/__init__.py` e il file `NOVITA.md`.
-2. Si carica un tag `vX.Y.Z` uguale alla versione.
-3. GitHub Actions (`.github/workflows/release.yml`) costruisce gli eseguibili con PyInstaller, l'installatore con
-   Inno Setup, calcola l'impronta SHA-256 e pubblica la Release. Il programma la trova e si aggiorna.
+1. Si aggiorna `__version__` in `lagdoctor/__init__.py` e il file `NOVITA.md`, e si carica la modifica su `main`.
+2. GitHub Actions (`.github/workflows/release.yml`) vede che quella versione non e' ancora pubblicata: costruisce gli
+   eseguibili con PyInstaller e l'installatore con Inno Setup, calcola l'impronta SHA-256 e pubblica la Release
+   `vX.Y.Z`. Il programma la trova e si aggiorna.
 
 ## Licenze
 

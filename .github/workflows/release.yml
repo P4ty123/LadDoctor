@@ -1,11 +1,12 @@
 # Costruisce LagDoctor-Setup.exe su un computer Windows di GitHub e lo pubblica come nuova versione.
-# Parte quando viene caricato un tag "vX.Y.Z" (deve essere uguale a __version__ in lagdoctor/__init__.py).
-# Avvio a mano (Actions > Crea versione > Run workflow): costruisce soltanto, senza pubblicare.
+# Parte a ogni modifica caricata su "main": se la versione scritta in lagdoctor/__init__.py non e' ancora
+# pubblicata, costruisce e pubblica la Release "vX.Y.Z" (creando anche l'etichetta). Se e' gia' pubblicata, non fa
+# niente. Avvio a mano (Actions > Crea versione > Run workflow): costruisce soltanto, senza pubblicare.
 name: Crea versione
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,27 +24,37 @@ jobs:
 
       - name: Versione
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $v = (python -c "import lagdoctor; print(lagdoctor.__version__)").Trim()
-          if ($env:GITHUB_REF_TYPE -eq "tag" -and "v$v" -ne $env:GITHUB_REF_NAME) {
-            throw "Il tag $env:GITHUB_REF_NAME non corrisponde alla versione $v scritta in lagdoctor/__init__.py"
-          }
+          gh release view "v$v" --repo $env:GITHUB_REPOSITORY *> $null
+          $exists = ($LASTEXITCODE -eq 0)
+          $publish = ($env:GITHUB_EVENT_NAME -eq "push") -and (-not $exists)
+          $build = $publish -or ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch")
           "LD_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Versione $v"
+          "LD_PUBLISH=$($publish.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "LD_BUILD=$($build.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if ($exists) { Write-Host "La versione $v e' gia' pubblicata: niente da costruire." } else { Write-Host "Versione $v" }
+          exit 0
 
       - name: Componenti
+        if: env.LD_BUILD == 'true'
         run: python -m pip install psutil==7.0.0 pyinstaller==6.13.0
 
       - name: Eseguibili (PyInstaller)
+        if: env.LD_BUILD == 'true'
         run: python -m PyInstaller --noconfirm --clean packaging\lagdoctor.spec
 
       - name: Controllo degli eseguibili
+        if: env.LD_BUILD == 'true'
         shell: pwsh
         run: |
           $p = Start-Process -FilePath "dist\LagDoctor\LagDoctorHelper.exe" -ArgumentList "--verifica" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw "Controllo fallito (codice $($p.ExitCode))" }
 
       - name: Installatore (Inno Setup)
+        if: env.LD_BUILD == 'true'
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
@@ -52,6 +63,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup non riuscito" }
 
       - name: Impronta SHA-256
+        if: env.LD_BUILD == 'true'
         shell: pwsh
         run: |
           $f = Get-Item "dist\LagDoctor-Setup-$env:LD_VERSION.exe"
@@ -60,9 +72,11 @@ jobs:
           Get-Content dist\SHA256SUMS.txt
 
       - name: Pubblica la versione
-        if: github.ref_type == 'tag'
+        if: env.LD_PUBLISH == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.LD_VERSION }}
+          target_commitish: ${{ github.sha }}
           name: LagDoctor ${{ env.LD_VERSION }}
           body_path: NOVITA.md
           files: |
@@ -70,7 +84,7 @@ jobs:
             dist/SHA256SUMS.txt
 
       - name: Conserva i file (avvio a mano)
-        if: github.ref_type != 'tag'
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: LagDoctor-${{ env.LD_VERSION }}

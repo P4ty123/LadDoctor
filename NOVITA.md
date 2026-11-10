@@ -1,3 +1,9 @@
+## LagDoctor 5.7.6
+
+- "Riduci i processi svchost": ora la soglia e' esattamente la RAM INSTALLATA in KB (32 GB = 2000000 esadecimale)
+  invece della RAM utilizzabile (un po' meno, che poteva lasciare i servizi separati). La voce risulta attiva anche
+  se il valore e' stato impostato a mano uguale o maggiore.
+
 ## LagDoctor 5.7.5
 
 - Game mode: controlla se e' partito un gioco ogni 5 secondi invece di 2 (ancora meno lavoro in background).

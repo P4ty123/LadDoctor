@@ -635,13 +635,39 @@ MEM_KEY = MEM
 SUB_PCIE = "501a4d13-42af-4429-9fd1-a8218c268e20"
 
 
-def _svchost_values():
+def installed_ram_kb():
+    """RAM INSTALLATA in KB (es. 32 GB = 33554432 = 0x2000000), non quella utilizzabile (un po' meno)."""
     try:
-        import psutil
-        kb = int(psutil.virtual_memory().total / 1024)
+        import ctypes
+        kb = ctypes.c_ulonglong(0)
+        if ctypes.windll.kernel32.GetPhysicallyInstalledSystemMemory(ctypes.byref(kb)) and kb.value:
+            return int(kb.value)
     except Exception:
+        pass
+    try:  # riserva: arrotondo la RAM utilizzabile al GB pieno superiore
+        import math
+        import psutil
+        return int(math.ceil(psutil.virtual_memory().total / 2**30)) * 1024 * 1024
+    except Exception:
+        return None
+
+
+def _svchost_values():
+    kb = installed_ram_kb()
+    if not kb:
         return []
-    return [("HKLM", r"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB", DWORD, kb)]
+    return [("HKLM", r"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB", DWORD, min(kb, 0xFFFFFFFF))]
+
+
+class SvcHostTweak(RegTweak):
+    """Attiva se la soglia e' uguale o MAGGIORE della RAM installata (Windows raggruppa i servizi)."""
+
+    def status(self):
+        kb = installed_ram_kb()
+        if not kb:
+            return None
+        cur = reg_read("HKLM", r"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB")[0]
+        return isinstance(cur, int) and cur >= kb
 
 
 def _nic_prop(keyword, value):
@@ -725,10 +751,11 @@ FAMOUS = [
              "lentamente.", "dubbia", risk=1, reboot=True,
              values=[("HKLM", MEM + r"\PrefetchParameters", "EnablePrefetcher", DWORD, 0)],
              recommend=lambda s: None),
-    RegTweak("svchost_split", "Memoria e disco", "Riduci i processi svchost (SvcHostSplitThresholdInKB)",
-             "Raggruppa i servizi di Windows in meno processi (da 80+ a ~30). Meno processi nel Task "
-             "Manager, effetto sulle prestazioni non dimostrato.", "dubbia", risk=1, reboot=True,
-             values=_svchost_values, recommend=lambda s: None, source="WinUtil (avanzati)"),
+    SvcHostTweak("svchost_split", "Memoria e disco", "Riduci i processi svchost (SvcHostSplitThresholdInKB)",
+                 "Imposta la soglia uguale alla RAM installata (es. 32 GB = 2000000 esadecimale): Windows "
+                 "raggruppa i servizi in meno processi (da 80+ a ~30). Meno processi nel Task Manager, effetto "
+                 "sulle prestazioni non dimostrato.", "dubbia", risk=1, reboot=True,
+                 values=_svchost_values, recommend=lambda s: None, source="WinUtil (avanzati)"),
     RegTweak("ntfs_lastaccess", "Memoria e disco", "Disattiva aggiornamento 'ultimo accesso' NTFS",
              "Windows non scrive sul disco l'ora di ultimo accesso a ogni file letto. Meno scritture "
              "inutili quando un gioco legge migliaia di file.", "bassa",

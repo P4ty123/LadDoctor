@@ -230,7 +230,10 @@ doc("prefetch_off",
     "Tweak famoso dai tempi di Windows XP con gli hard disk.",
     "Su SSD non migliora nulla e i programmi possono aprirsi piu' lentamente. Su Windows 11 e' sconsigliato.")
 doc("svchost_split",
-    "Windows divide i servizi in tanti processi svchost separati (uno per servizio) se hai abbastanza RAM.",
+    "Windows divide i servizi in tanti processi svchost separati (uno per servizio) se la RAM installata supera "
+    "la soglia SvcHostSplitThresholdInKB (predefinita 3,5 GB = 380000 esadecimale). LagDoctor la imposta uguale "
+    "alla RAM installata in KB: 8 GB = 800000, 16 GB = 1000000, 32 GB = 2000000, 64 GB = 4000000 (esadecimale, "
+    "come li mostra regedit).",
     "Meno processi nel Task Manager e un po' meno RAM usata.",
     "Se un servizio va in crash si porta dietro gli altri dello stesso gruppo. Nessun beneficio misurato nei "
     "giochi.")

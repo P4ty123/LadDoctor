@@ -1,3 +1,8 @@
+## LagDoctor 5.9.3
+
+- Utilizzo CPU piu' stabile nella Panoramica: media degli ultimi secondi come in Gestione attivita' (i picchi brevi,
+  ad esempio all'apertura di un programma, non fanno piu' saltare il numero).
+
 ## LagDoctor 5.9.2
 
 - Corretto l'utilizzo della CPU che restava sempre a 0: ora viene letto come in Gestione attivita'.

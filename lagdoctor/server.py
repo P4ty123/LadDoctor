@@ -733,8 +733,17 @@ _CPU_LOCK = threading.Lock()
 
 
 def _cpu_util():
+    """Media mobile delle ultime letture (circa 3 secondi), come fa Gestione attivita': i picchi brevi (es. quando si
+    apre un programma) non fanno saltare il numero a ogni lettura, i cambi veri si vedono in 1-2 secondi."""
     with _CPU_LOCK:  # una lettura alla volta (le richieste della pagina arrivano da thread diversi)
-        return _cpu_util_locked()
+        v = _cpu_util_locked()
+        if v is None:
+            return None
+        now = time.time()
+        hist = [(t, x) for t, x in _CPU.get("hist", []) if now - t < 3.2] + [(now, v)]
+        _CPU["hist"] = hist
+        w = [0.5 + i for i in range(len(hist))]  # piu' peso alle letture recenti
+        return sum(x * k for (_t, x), k in zip(hist, w)) / sum(w)
 
 
 def _cpu_util_locked():

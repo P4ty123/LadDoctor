@@ -37,7 +37,7 @@ def _get(url, timeout=15):
 
 def check(force=False):
     """Restituisce dict: current, latest, available, notes, url, setup (url), sums (url), error."""
-    if not force and _CACHE["data"] and time.time() - _CACHE["t"] < 1800:
+    if not force and _CACHE["data"] and time.time() - _CACHE["t"] < 600:
         return _CACHE["data"]
     out = {"current": __version__, "latest": None, "available": False, "notes": "", "page": PAGE,
            "installed": paths.FROZEN, "error": None}

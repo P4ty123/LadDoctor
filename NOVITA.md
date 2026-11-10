@@ -1,3 +1,9 @@
+## LagDoctor 5.7.3
+
+- Pallino verde sul pulsante "Aggiornamenti" quando c'e' una versione nuova (anche con LagDoctor gia' aperto:
+  il controllo si ripete ogni 15 minuti).
+- Prima versione da installare con il pulsante "Aggiorna ora".
+
 ## LagDoctor 5.7.2 - correzioni importanti per la versione installata
 
 - **Corretto: LagDoctor si chiudeva da solo pochi secondi dopo l'avvio** (blocco su "Controllo impostazioni" e

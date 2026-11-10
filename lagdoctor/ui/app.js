@@ -833,6 +833,7 @@ $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal" && !$
 function showUpdateBar(u) {
   const bar = $("#update-bar");
   $("#nav-upd").hidden = !u.available;
+  $("#btn-update").title = u.available ? "Aggiornamento disponibile: LagDoctor " + u.latest : "";
   if (!u.available) { bar.hidden = true; return; }
   bar.hidden = false;
   bar.innerHTML = `<b>Nuova versione: LagDoctor ${esc(u.latest)}</b><span class="grow mut">Hai la ${esc(u.current)}. Le tue modifiche e i backup restano dove sono.</span><button class="sm" id="upd-open">Vedi e aggiorna</button>`;
@@ -870,6 +871,8 @@ async function updateDialog(u) {
   };
 }
 $("#btn-update").onclick = () => updateDialog(null);
+/* anche con LagDoctor aperto: ricontrollo ogni 15 minuti */
+setInterval(() => checkUpdates(false), 15 * 60 * 1000);
 
 /* ------------------------------------------------------------------ IMPOSTAZIONI */
 async function settingsDialog() {
@@ -928,14 +931,14 @@ async function backgroundBoot(job) {
 (async () => {
   try {
     const st = await api("/api/state");
-    if (st.sysinfo && !st.booting) { go("home"); return; }      /* finestra ricaricata: gia' pronto */
+    if (st.sysinfo && !st.booting) { go("home"); setTimeout(() => checkUpdates(false), 1500); return; } /* finestra ricaricata */
     const job = await api("/api/boot", {});
     const st2 = await api("/api/state");
     if (st2.hw_cached || st2.sysinfo) {                           /* avvii successivi: subito l'interfaccia */
       S.bootMsg = job.messages[job.messages.length - 1];
       backgroundBoot(job);
       go("home");
-      setTimeout(() => checkUpdates(false), 4000);
+      setTimeout(() => checkUpdates(false), 2000);
       return;
     }
     /* primo avvio: aspetto solo la lettura dell'hardware, poi il resto continua in background */
@@ -949,7 +952,7 @@ async function backgroundBoot(job) {
     }
     if (j.status === "error") throw new Error(j.error);
     go("home");
-    setTimeout(() => checkUpdates(false), 4000);
+    setTimeout(() => checkUpdates(false), 2000);
   } catch (e) {
     main().innerHTML = `<h1>Errore all'avvio</h1><p>${esc(e.message)}</p><p class="mut">Dettagli nel file errore.txt nella cartella di LagDoctor.</p>`;
   }

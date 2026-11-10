@@ -553,6 +553,7 @@ async function gamemodePage(scanAgain) {
       ${(st.actions || []).length ? `<details ${st.active ? "open" : ""} style="margin-top:10px"><summary>Cosa ha fatto ${st.active ? "ora" : "l'ultima volta"}</summary><ul>${st.actions.map((a) => "<li>" + esc(a) + "</li>").join("")}</ul></details>` : ""}
       ${(st.errors || []).length ? `<ul style="color:#e8a23a">${st.errors.map((a) => "<li>" + esc(a) + "</li>").join("")}</ul>` : ""}
     </div>
+    ${c.enabled ? `<h2>Verifica dal vivo</h2><div class="card" id="gm-verify">${st.active ? "" : '<p class="mut" style="margin:0">Mentre giochi, qui puoi controllare che ogni ottimizzazione sia davvero attiva in Windows.</p>'}</div>` : ""}
     <h2>Giochi</h2>
     <p class="mut">${c.games.length} giochi trovati sul PC (Steam, Epic, GOG, Xbox/Game Pass, Ubisoft, EA, Battle.net, Riot, Minecraft...). La game mode si attiva solo per quelli accesi.${r.added ? ` <b>${r.added} nuovi trovati.</b>` : ""}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -590,6 +591,7 @@ async function gamemodePage(scanAgain) {
   $$("[data-opt]").forEach((x) => x.onchange = () => post({ action: "opt", id: x.dataset.opt, value: x.checked }));
   $$("[data-rm]").forEach((x) => x.onclick = () => post({ action: "remove", id: x.dataset.rm }, "Tolto dall'elenco"));
   const nav = $("#nav-gm"); if (nav) nav.hidden = !st.active;
+  if (st.active && $("#gm-verify")) gmVerify($("#gm-verify"));
   clearInterval(S.sensorTimer);
   S.sensorTimer = setInterval(async () => {
     if (S.page !== "gamemode" || !$("#gm-status")) return clearInterval(S.sensorTimer);
@@ -599,6 +601,23 @@ async function gamemodePage(scanAgain) {
           (n.status.actions || []).length !== (st.actions || []).length) gamemodePage();
     } catch (e) { /* riprova al prossimo giro */ }
   }, 4000);
+}
+/* verifica dal vivo delle ottimizzazioni della game mode */
+async function gmVerify(box) {
+  box.innerHTML = '<div class="row" style="gap:10px"><div class="spinner" style="width:20px;height:20px;margin:0"></div><span class="mut">Controllo lo stato reale di Windows...</span></div>';
+  let r;
+  try { r = await api("/api/gamemode/verify"); } catch (e) { box.innerHTML = `<p class="mut">Errore: ${esc(e.message)}</p>`; return; }
+  if (!r.active) { box.innerHTML = '<p class="mut">La verifica si fa mentre la game mode e\' attiva: apri un gioco e torna qui.</p>'; return; }
+  const ico = (ok) => ok === true ? '<span class="vk ok">✓</span>' : ok === false ? '<span class="vk ko">✗</span>' : '<span class="vk na">•</span>';
+  let html = `<div class="row" style="margin-bottom:8px"><b>${r.ok} ok</b>${r.ko ? `<span class="badge b-bad">${r.ko} non applicate</span>` : '<span class="badge b-ok">tutto applicato</span>'}<span class="grow"></span><button class="ghost sm" id="gm-ver-again">Ricontrolla</button></div>`;
+  let last = "";
+  r.items.forEach((i) => {
+    if (i.group !== last) { html += `<div class="vgroup">${esc(i.group)}</div>`; last = i.group; }
+    html += `<div class="vrow">${ico(i.ok)}<span class="grow">${esc(i.name)}</span><span class="mut">${esc(i.detail || "")}</span></div>`;
+  });
+  html += '<p class="mut" style="font-size:12px;margin:10px 0 0">✓ applicata e controllata adesso in Windows · ✗ non applicata · • da sapere / non verificabile</p>';
+  box.innerHTML = html;
+  $("#gm-ver-again").onclick = () => gmVerify(box);
 }
 async function gmAdd() {
   const r = await api("/api/processes");

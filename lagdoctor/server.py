@@ -573,6 +573,8 @@ class Handler(BaseHTTPRequestHandler):
             return updater.check(force=qs.get("force", ["0"])[0] == "1")
         if path == "/api/gamemode":
             return gamemode_json(scan=qs.get("scan", ["0"])[0] == "1")
+        if path == "/api/gamemode/verify":
+            return gamemode.verify()
         if path == "/api/sessions":
             return {"items": list(reversed(sessions.all_sessions()))}
         if path == "/api/compare":

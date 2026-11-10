@@ -1,3 +1,9 @@
+## LagDoctor 5.10.0
+
+- Game mode: nuova sezione "Verifica dal vivo". Mentre giochi controlla lo stato REALE di Windows per ogni
+  ottimizzazione (priorita' CPU e GPU del gioco, affinita', servizi fermati, app chiuse, programmi in background,
+  timer, rete QoS, piano energetico, RAM) e mostra ok / non applicata / da sapere, con il dettaglio.
+
 ## LagDoctor 5.9.3
 
 - Utilizzo CPU piu' stabile nella Panoramica: media degli ultimi secondi come in Gestione attivita' (i picchi brevi,

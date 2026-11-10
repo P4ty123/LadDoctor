@@ -536,7 +536,7 @@ class Engine:
     def add_game_process(self, proc, game, opts, running_names=()):
         try:
             info = {"game": game["name"], "create": proc.create_time(), "name": proc.name(), "prev_prio": None,
-                    "prev_aff": None}
+                    "prev_aff": None, "prio_key": game.get("priority") or "high", "game_id": game.get("id")}
         except psutil.Error:
             return
         self.game_pids[proc.pid] = info
@@ -765,7 +765,9 @@ class Watcher:
             return
         self.last_status = now
         e = self.engine
-        _save(STATUS, {"pid": os.getpid(), "updated": now, "active": e.active, "cpu": e.cpu,
+        procs = {str(pid): {k: i.get(k) for k in ("name", "game", "create", "prio_key", "anticheat")}
+                 for pid, i in e.game_pids.items()}
+        _save(STATUS, {"pid": os.getpid(), "updated": now, "active": e.active, "cpu": e.cpu, "procs": procs,
                        "games": sorted({i["game"] for i in e.game_pids.values()}) or running_games,
                        "since": (e.j or {}).get("since"), "actions": e.actions[-40:], "errors": e.errors[-20:]})
 
@@ -966,6 +968,163 @@ def recover():
         Engine().deactivate("ripristino da LagDoctor")
         return True
     return False
+
+
+# ------------------------------------------------------------------ verifica dal vivo
+def _gpu_priority_of(pid):
+    try:
+        k32, h = _open(pid, 0x1000)  # QUERY_LIMITED_INFORMATION
+        if not h:
+            return None
+        try:
+            f = ctypes.windll.gdi32.D3DKMTGetProcessSchedulingPriorityClass
+            f.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_int)]
+            v = ctypes.c_int(-1)
+            return v.value if f(h, ctypes.byref(v)) == 0 else None
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return None
+
+
+def _timer_now_ms():
+    try:
+        mn, mx, cur = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.c_ulong()
+        ctypes.windll.ntdll.NtQueryTimerResolution(ctypes.byref(mn), ctypes.byref(mx), ctypes.byref(cur))
+        return cur.value / 10000.0
+    except Exception:
+        return None
+
+
+def _service_state(name):
+    try:
+        return psutil.win_service_get(name).status()
+    except Exception:
+        return None
+
+
+def verify():
+    """Controlla lo stato REALE di Windows mentre la game mode e' attiva: per ogni ottimizzazione ok / no / non
+    verificabile, con il dettaglio. Non si fida di quello che la game mode dice di aver fatto: va a guardare."""
+    st = _load(STATUS, {})
+    j = _load(JOURNAL, None)
+    cfg = load_config()
+    opts = cfg["opts"]
+    running = bool(st.get("pid")) and psutil.pid_exists(st["pid"])
+    if not (running and st.get("active") and j):
+        return {"active": False, "items": []}
+    items = []
+
+    def add(group, name, ok, detail=""):
+        items.append({"group": group, "name": name, "ok": ok, "detail": detail})
+
+    cpu = st.get("cpu") or {}
+    names_running = {}
+    for p in psutil.process_iter(["name"]):
+        names_running.setdefault((p.info["name"] or "").lower(), []).append(p)
+    # ---------------- il gioco
+    for pid_s, info in (st.get("procs") or {}).items():
+        pid = int(pid_s)
+        try:
+            p = psutil.Process(pid)
+            if abs(p.create_time() - (info.get("create") or 0)) >= 1:
+                continue
+        except psutil.Error:
+            continue
+        exe = info.get("name") or "?"
+        label, cls, gcls = PRIORITY.get(info.get("prio_key") or "high", PRIORITY["high"])
+        if opts.get("priority") and cls != PRIORITY["normal"][1]:
+            try:
+                cur = p.nice()
+            except psutil.Error:
+                cur = None
+            cur_name = {v[1]: v[0] for v in PRIORITY.values()}.get(cur, {0x40: "Bassa", 0x4000: "Inferiore al normale",
+                                                                          0x100: "In tempo reale"}.get(cur, "?"))
+            if info.get("anticheat"):
+                reg = _ifeo_get(exe)
+                if cur == cls:
+                    add("Gioco", "Priorita' CPU di %s" % exe, True, "%s (data da Windows: anti-cheat %s)" % (label, info["anticheat"]))
+                elif reg == IFEO_CLASS.get(info.get("prio_key") or "high"):
+                    add("Gioco", "Priorita' CPU di %s" % exe, None,
+                        "impostata tramite Windows: diventa %s dalla PROSSIMA apertura del gioco (anti-cheat %s)"
+                        % (label, info["anticheat"]))
+                else:
+                    add("Gioco", "Priorita' CPU di %s" % exe, False, "ora: %s (anti-cheat %s)" % (cur_name, info["anticheat"]))
+            else:
+                add("Gioco", "Priorita' CPU di %s" % exe, cur == cls,
+                    label if cur == cls else "ora: %s, attesa: %s" % (cur_name, label))
+                if opts.get("gpu_priority"):
+                    g = _gpu_priority_of(pid)
+                    gnames = {0: "Inattiva", 1: "Inferiore al normale", 2: "Normale", 3: "Superiore al normale",
+                              4: "Alta", 5: "Tempo reale"}
+                    add("Gioco", "Priorita' GPU di %s" % exe, None if g is None else g == gcls,
+                        "non leggibile" if g is None else (label if g == gcls else "ora: %s" % gnames.get(g, g)))
+        if opts.get("affinity") and cpu.get("apply") and not info.get("anticheat"):
+            try:
+                aff = sorted(p.cpu_affinity())
+            except psutil.Error:
+                aff = None
+            want = sorted(cpu.get("cpus") or [])
+            add("Gioco", "Affinita' dei core di %s" % exe, None if aff is None else aff == want,
+                "core %s" % _cpus_text(want) if aff == want else "ora: core %s" % _cpus_text(aff or []))
+    if not any(i["group"] == "Gioco" for i in items):
+        add("Gioco", "Processo del gioco", None, "in attesa (la priorita' si applica 8-10 secondi dopo l'avvio)")
+    if opts.get("affinity") and not cpu.get("apply"):
+        add("Gioco", "Affinita' dei core", None, "non applicata apposta: " + (cpu.get("why") or "non utile su questo processore"))
+    # ---------------- sistema
+    for name in j.get("services") or []:
+        s = _service_state(name)
+        add("Servizi in pausa", name, None if s is None else s == "stopped",
+            {"stopped": "fermo", "running": "RIPARTITO (riavviato da Windows o da un altro programma)"}.get(s, s or "non leggibile"))
+    if opts.get("stop_services") or opts.get("stop_updates"):
+        if not j.get("services"):
+            add("Servizi in pausa", "Servizi", True, "erano gia' tutti fermi")
+    targets = []
+    if opts.get("close_apps"):
+        targets += APPS
+    if opts.get("close_onedrive"):
+        targets.append("onedrive.exe")
+    if opts.get("close_shell"):
+        targets += SHELL
+    reopened = sorted({t for t in targets if t in names_running})
+    if targets:
+        add("App chiuse", "Componenti chiusi (widget, Collegamento al telefono, aggiornamenti...)",
+            True if not reopened else None,
+            "nessuno aperto" if not reopened else "riaperti da Windows: " + ", ".join(reopened) +
+            " (Windows li riapre da solo: usano poca CPU)")
+    if opts.get("bg_priority"):
+        tot = low = 0
+        for key, (ct, _prev) in (j.get("bg") or {}).items():
+            try:
+                p = psutil.Process(int(key))
+                if abs(p.create_time() - ct) >= 1:
+                    continue
+                tot += 1
+                low += p.nice() == 0x4000
+            except (psutil.Error, ValueError):
+                continue
+        add("Programmi in background", "Priorita' 'Inferiore al normale'", None if tot == 0 else low == tot,
+            "nessun programma da abbassare" if tot == 0 else "%d programmi su %d" % (low, tot))
+    if opts.get("timer"):
+        t = _timer_now_ms()
+        add("Sistema", "Timer di sistema", None if t is None else t <= 0.51,
+            "non leggibile" if t is None else "%.3f ms" % t)
+    if opts.get("power_plan"):
+        a = _active_scheme()
+        add("Sistema", "Piano Prestazioni elevate", a == "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", a or "non leggibile")
+    if opts.get("qos") and j.get("qos"):
+        code, out = _ps("Get-NetQosPolicy -ErrorAction SilentlyContinue | Where-Object Name -like 'LagDoctor-*' | "
+                        "ForEach-Object { $_.Name + '=' + $_.DSCPAction }", timeout=30)
+        have = dict(l.strip().split("=", 1) for l in out.splitlines() if "=" in l)
+        for pol in j["qos"]:
+            add("Rete", "Priorita' QoS per " + pol.replace("LagDoctor-", ""), have.get(pol) == "46",
+                "DSCP 46" if have.get(pol) == "46" else "regola non trovata")
+    if opts.get("trim_ram"):
+        msg = next((a for a in reversed(st.get("actions") or []) if a.startswith("RAM liberata")), None)
+        add("Sistema", "RAM liberata all'avvio del gioco", True if msg else None,
+            msg.replace("RAM liberata dai programmi in background: ", "") if msg else "non risulta eseguita")
+    return {"active": True, "games": st.get("games"), "items": items,
+            "ok": sum(1 for i in items if i["ok"] is True), "ko": sum(1 for i in items if i["ok"] is False)}
 
 
 def quick_status():

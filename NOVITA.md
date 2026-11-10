@@ -1,3 +1,7 @@
+## LagDoctor 5.7.5
+
+- Game mode: controlla se e' partito un gioco ogni 5 secondi invece di 2 (ancora meno lavoro in background).
+
 ## LagDoctor 5.7.4
 
 - Aggiornamento: la finestra della versione vecchia ora si chiude da sola, invece di restare aperta accanto a

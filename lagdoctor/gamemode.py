@@ -1,6 +1,6 @@
 """Game mode di LagDoctor.
 
-Un piccolo programma invisibile (parte con Windows, con i permessi di amministratore) controlla ogni 2 secondi se
+Un piccolo programma invisibile (parte con Windows, con i permessi di amministratore) controlla ogni 5 secondi se
 e' partito uno dei giochi scelti. Quando un gioco parte:
   - priorita' CPU e GPU del gioco piu' alte (Alta o Superiore al normale, scelta per ogni gioco)
   - priorita' piu' bassa per i programmi in background dell'utente (non per chat vocale, overlay, launcher...)
@@ -39,7 +39,7 @@ LOG = os.path.join(ROOT, "gamemode.log")
 TASK = "LagDoctor GameMode"
 LAUNCH_TASK = "LagDoctor Avvio utente"
 CREATE_NO_WINDOW = 0x08000000
-POLL = 2.0
+POLL = 5.0  # secondi tra un controllo e l'altro dei processi aperti
 GRACE = 6.0  # secondi senza giochi prima di spegnere (alcuni giochi si riavviano da soli all'avvio)
 AC_WAIT = 8.0  # secondi di attesa prima di toccare un gioco nuovo (per vedere se parte un anti-cheat)
 
@@ -405,7 +405,7 @@ class Engine:
         self.actions = []
         self.errors = []
         self.my_user = None
-        self.bg_seen = {}  # pid -> create_time gia' valutati (per non rileggere tutto ogni 2 secondi)
+        self.bg_seen = {}  # pid -> create_time gia' valutati (per non rileggere tutto a ogni controllo)
         self.new_ac_exes = []  # (id gioco, exe, anti-cheat) da salvare nella configurazione
         try:
             self.cpu = cputopo.decide()

@@ -1,4 +1,4 @@
 """LagDoctor: diagnosi e correzione degli stutter nei giochi."""
 
-__version__ = "5.10.2"
+__version__ = "5.11.0"
 GITHUB_REPO = "P4ty123/LadDoctor"  # dove vengono pubblicati gli aggiornamenti

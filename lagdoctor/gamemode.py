@@ -63,6 +63,15 @@ OPTIONS = [
      "quando aiuta davvero: Ryzen con due CCD (il gioco sul CCD con la 3D V-Cache o sul primo CCD), Intel ibridi "
      "con almeno 8 core P (il gioco solo sui core P). Sugli altri processori non tocca nulla.",
      "Se un gioco usa piu' di 16 thread pesanti (rarissimo) potrebbe avere meno FPS: in quel caso spegnila."),
+    ("bg_io", True, "Priorita' bassa anche per disco e memoria",
+     "Ai programmi abbassati (in background e del produttore del PC) Windows da' priorita' bassa anche per leggere e "
+     "scrivere sul disco e per tenere i dati in RAM: quando il gioco carica texture o mappe passa per primo, e la "
+     "memoria del gioco viene liberata per ultima.",
+     "Un programma che copia file o scarica mentre giochi va piu' piano (riprende la velocita' a fine partita)."),
+    ("vendor_priority", True, "Priorita' bassa ai programmi del produttore del PC",
+     "Dell SupportAssist, HP Touchpoint/Analytics, Lenovo Vantage e i servizi di ASUS e MSI restano accesi ma "
+     "lavorano solo quando il gioco non ha bisogno di CPU e disco: sono noti per picchi di CPU e di latenza.",
+     "Nessuno: restano attivi (RGB, ventole, aggiornamenti), solo piu' lenti durante il gioco."),
     ("bg_priority", True, "Priorita' bassa ai programmi in background",
      "Browser, app di sistema e programmi aperti passano a 'Inferiore al normale': usano la CPU solo quando il "
      "gioco non ne ha bisogno. Esclusi chat vocale (Discord, TeamSpeak), OBS, overlay, launcher, software di "
@@ -131,6 +140,29 @@ PROTECT = {
     "steelseriesgg.exe", "steelseriesengine.exe", "wootility.exe", "vgtray.exe", "vgc.exe", "faceit.exe",
     "faceitclient.exe", "medal.exe", "overwolf.exe", "parsecd.exe", "moonlight.exe", "sunshine.exe",
 }
+# programmi dei produttori di PC (girano anche come servizi di sistema): priorita' bassa, mai chiusi
+VENDOR_PROCS = {
+    # Dell
+    "supportassistagent.exe", "dell.techhub.exe", "dell.techhub.instrumentation.subagent.exe",
+    "dell.techhub.datamanager.subagent.exe", "dell.techhub.analytics.subagent.exe", "dell.coreservices.client.exe",
+    "dellclientmanagementservice.exe", "serviceshell.exe", "ddvdatacollector.exe", "ddvrulesprocessor.exe",
+    "ddvcollectorsvcapi.exe", "dell.d3.winsvc.exe",
+    # HP
+    "touchpointanalyticsclientservice.exe", "apphelpercap.exe", "diagscap.exe", "networkcap.exe", "sysinfocap.exe",
+    "hpprintscandoctorservice.exe", "hpcommrecovery.exe", "hpqwmiex.exe",
+    # Lenovo
+    "lenovovantageservice.exe", "imcontroller.service.exe", "lenovo.modern.imcontroller.exe",
+    "lenovo.modern.imcontroller.pluginhost.exe", "lenovoutilityservice.exe", "litssvc.exe",
+    # ASUS
+    "asuscertservice.exe", "asus_framework.exe", "asusupdatecheck.exe", "armourycrate.service.exe",
+    "armourycrate.usersessionhelper.exe", "armourycratecontrolinterface.exe", "asussoftwaremanager.exe",
+    "asussoftwaremanageragent.exe", "asussystemanalysis.exe", "asussystemdiagnosis.exe", "asusoptimization.exe",
+    "lightingservice.exe", "rogliveservice.exe", "asuslinkremote.exe", "asuslinknear.exe",
+    # MSI
+    "msi.centralserver.exe", "msi_central_service.exe", "msi.terminalserver.exe", "msi_companion_service.exe",
+    "msi.notifyserver.exe",
+}
+
 PROTECT_PREFIX = ("discord", "voicemeeter", "razer", "lghub", "steelseries", "obs", "nvidia", "nv", "amd", "radeon",
                   "easyanticheat", "beservice", "battleye", "faceit", "vanguard", "spotify", "corsair", "asus",
                   "armoury", "msi", "elgato", "wave link", "nahimic", "realtek", "sonic")
@@ -372,6 +404,51 @@ def _set_gpu_priority(pid, cls):
         return False
 
 
+IO_LOW, MEM_LOW = 1, 2  # priorita' I/O "Bassa" (0 sarebbe "Molto bassa": troppo) e memoria "Bassa"
+
+
+def _io_mem_get(pid):
+    """(priorita' disco, priorita' memoria) di un processo, o (None, None)."""
+    try:
+        k32, h = _open(pid, 0x0400 | 0x1000)
+        if not h:
+            return None, None
+        try:
+            nt = ctypes.windll.ntdll
+            nt.NtQueryInformationProcess.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong,
+                                                     ctypes.c_void_p]
+            io, mem = ctypes.c_ulong(), ctypes.c_ulong()
+            a = nt.NtQueryInformationProcess(h, 33, ctypes.byref(io), 4, None)   # ProcessIoPriority
+            b = nt.NtQueryInformationProcess(h, 39, ctypes.byref(mem), 4, None)  # ProcessPagePriority
+            return (io.value if a == 0 else None), (mem.value if b == 0 else None)
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return None, None
+
+
+def _io_mem_set(pid, io=None, mem=None):
+    try:
+        k32, h = _open(pid, 0x0200 | 0x1000)  # SET_INFORMATION
+        if not h:
+            return False
+        try:
+            nt = ctypes.windll.ntdll
+            nt.NtSetInformationProcess.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong]
+            ok = True
+            if io is not None:
+                v = ctypes.c_ulong(io)
+                ok &= nt.NtSetInformationProcess(h, 33, ctypes.byref(v), 4) == 0
+            if mem is not None:
+                v = ctypes.c_ulong(mem)
+                ok &= nt.NtSetInformationProcess(h, 39, ctypes.byref(v), 4) == 0
+            return ok
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return False
+
+
 def _trim(pid):
     try:
         k32, h = _open(pid, 0x0100 | 0x0400)  # SET_QUOTA | QUERY_INFORMATION
@@ -539,8 +616,8 @@ class Engine:
         """Processi dell'utente in background (non protetti, non giochi)."""
         for p in psutil.process_iter(["pid", "name"]):
             if p.pid in self.game_pids or p.pid in self.game_seen or p.pid == os.getpid() or \
-                    _protected(p.info["name"]):
-                continue
+                    _protected(p.info["name"]) or (p.info["name"] or "").lower() in VENDOR_PROCS:
+                continue  # (i programmi dei produttori di PC hanno la loro opzione)
             if only_new:
                 try:
                     ct = p.create_time()
@@ -684,22 +761,51 @@ class Engine:
             except Exception:
                 continue
 
-    def lower_background(self):
-        """Chiamata a ogni giro: abbassa anche i programmi aperti dopo l'avvio del gioco."""
-        changed = 0
-        for p in self._user_bg(only_new=True):
-            key = str(p.pid)
-            if key in self.j["bg"]:
+    def _vendor_procs(self):
+        """Programmi dei produttori di PC (anche servizi di sistema): solo quelli nuovi dall'ultimo controllo."""
+        for p in psutil.process_iter(["pid", "name"]):
+            if (p.info["name"] or "").lower() not in VENDOR_PROCS or p.pid in self.game_pids or p.pid in self.game_seen:
                 continue
             try:
-                prev = p.nice()
-                if prev != 0x20:  # solo quelli a priorita' Normale
-                    continue
-                p.nice(0x4000)    # BELOW_NORMAL
-                self.j["bg"][key] = [p.create_time(), prev, p.info.get("name") or p.name()]
-                changed += 1
+                ct = p.create_time()
             except psutil.Error:
                 continue
+            if self.bg_seen.get(p.pid) == ct:
+                continue
+            self.bg_seen[p.pid] = ct
+            yield p
+
+    def _lower(self, p, io_mem, vendor=False):
+        key = str(p.pid)
+        if key in self.j["bg"]:
+            return False
+        try:
+            prev = p.nice()
+            if prev != 0x20:  # solo quelli a priorita' Normale
+                return False
+            p.nice(0x4000)    # BELOW_NORMAL
+            rec = [p.create_time(), prev, p.info.get("name") or p.name(), None, None, vendor]
+            if io_mem:
+                pio, pmem = _io_mem_get(p.pid)
+                if _io_mem_set(p.pid, IO_LOW if pio is not None and pio > IO_LOW else None,
+                               MEM_LOW if pmem is not None and pmem > MEM_LOW else None):
+                    rec[3], rec[4] = pio, pmem
+            self.j["bg"][key] = rec
+            return True
+        except psutil.Error:
+            return False
+
+    def lower_background(self, opts=None):
+        """Chiamata a ogni giro: abbassa anche i programmi aperti dopo l'avvio del gioco."""
+        opts = opts or DEFAULT_OPTS
+        io_mem = bool(opts.get("bg_io"))
+        changed = 0
+        if opts.get("bg_priority"):
+            for p in self._user_bg(only_new=True):
+                changed += self._lower(p, io_mem)
+        if opts.get("vendor_priority"):
+            for p in self._vendor_procs():
+                changed += self._lower(p, io_mem, vendor=True)
         if changed:
             self._jsave()
         return changed
@@ -731,6 +837,8 @@ class Engine:
                 p = psutil.Process(int(key))
                 if abs(p.create_time() - ct) < 1:
                     p.nice(prev)
+                    if len(rec) > 4 and (rec[3] is not None or rec[4] is not None):
+                        _io_mem_set(p.pid, rec[3], rec[4])
             except (psutil.Error, ValueError):
                 pass
         for pol in j.get("qos", []):
@@ -866,8 +974,8 @@ class Watcher:
                 e.new_ac_exes = []
             for pid in [x for x in e.game_pids if x not in running]:
                 del e.game_pids[pid]
-            if opts.get("bg_priority"):
-                e.lower_background()
+            if opts.get("bg_priority") or opts.get("vendor_priority"):
+                e.lower_background(opts)
             e.keep_services_stopped()
         elif e.active and time.time() - self.last_seen > GRACE:
             e.deactivate()
@@ -1160,7 +1268,7 @@ def verify():
     if (opts.get("close_apps") or opts.get("close_onedrive") or opts.get("close_shell")) and not j.get("closed"):
         add("App chiuse", "Componenti di Windows", True, "nessuno era aperto")
     # ---------------- programmi in background (raggruppati per nome)
-    if opts.get("bg_priority"):
+    if opts.get("bg_priority") or opts.get("vendor_priority"):
         groups = {}
         game_pids = {int(x) for x in (st.get("procs") or {})}
         for key, rec in (j.get("bg") or {}).items():
@@ -1172,23 +1280,29 @@ def verify():
                 if abs(p.create_time() - ct) >= 1:
                     continue
                 name = rec[2] if len(rec) > 2 else p.name()
-                g = groups.setdefault(name, [0, 0])
+                vendor = len(rec) > 5 and rec[5]
+                g = groups.setdefault((vendor, name), [0, 0, 0, 0])
                 g[0] += 1
                 g[1] += p.nice() == 0x4000
+                if len(rec) > 4 and (rec[3] is not None or rec[4] is not None):
+                    io, mem = _io_mem_get(p.pid)
+                    g[2] += 1
+                    g[3] += (io is not None and io <= IO_LOW) and (mem is None or mem <= MEM_LOW)
             except (psutil.Error, ValueError, IndexError):
                 continue
         browsers = ("msedge.exe", "chrome.exe", "firefox.exe", "brave.exe", "opera.exe", "opera_gx.exe",
                     "vivaldi.exe", "msedgewebview2.exe")
-        for name in sorted(groups, key=str.lower):
-            tot, low = groups[name]
+        for vendor, name in sorted(groups, key=lambda k: (k[0], k[1].lower())):
+            tot, low, iot, iolow = groups[(vendor, name)]
+            grp = "Programmi del produttore del PC" if vendor else "Programmi a priorita' bassa"
             label = name + (" ×%d" % tot if tot > 1 else "")
-            if low == tot:
-                add("Programmi a priorita' bassa", label, True, "Inferiore al normale")
+            disk = (", disco e memoria bassi" if iolow == iot else ", disco/memoria: %d su %d" % (iolow, iot)) if iot else ""
+            if low == tot and iolow == iot:
+                add(grp, label, True, "CPU bassa" + disk if iot else "Inferiore al normale")
             elif name.lower() in browsers:
-                add("Programmi a priorita' bassa", label, None,
-                    "%d su %d: il browser regola da solo la priorita' delle sue schede" % (low, tot))
+                add(grp, label, None, "%d su %d%s: il browser regola da solo la priorita' delle sue schede" % (low, tot, disk))
             else:
-                add("Programmi a priorita' bassa", label, False, "%d su %d (il programma ha cambiato da solo la sua priorita')" % (low, tot))
+                add(grp, label, False, "CPU bassa %d su %d%s (il programma ha cambiato da solo la priorita')" % (low, tot, disk))
         if not groups:
             add("Programmi a priorita' bassa", "Programmi in background", None, "nessun programma da abbassare")
     # ---------------- sistema e rete

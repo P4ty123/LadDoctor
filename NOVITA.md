@@ -1,3 +1,11 @@
+## LagDoctor 5.11.0
+
+- Game mode: priorita' bassa anche per disco e memoria dei programmi in background. Quando il gioco carica dati dal
+  disco passa per primo, e la sua memoria viene liberata per ultima.
+- Game mode: priorita' bassa per i programmi dei produttori di PC (Dell SupportAssist, HP Touchpoint/Analytics,
+  Lenovo Vantage, servizi ASUS e MSI). Restano accesi, lavorano solo quando il gioco non ne ha bisogno.
+- Verifica: per ogni programma mostra anche disco e memoria; i programmi dei produttori hanno un gruppo a parte.
+
 ## LagDoctor 5.10.2
 
 - Game mode: corretto il gioco che per qualche secondo all'avvio veniva messo a priorita' bassa insieme ai programmi

@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import psutil
 
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
-from . import __version__, settings, updater
+from . import __version__, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
 
@@ -514,6 +514,8 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/bye":  # la finestra e' stata chiusa (inviato dal browser senza intestazioni)
             if secrets.compare_digest(parse_qs(u.query).get("t", [""])[0], TOKEN):
                 STATE["bye"] = time.time()
+                if TRAY is not None and TRAY.ok and not STATE.get("tray_hint"):
+                    threading.Thread(target=_tray_hint, daemon=True).start()
             return self._send(204, b"", "text/plain")
         STATE["last_req"] = time.time()
         if not secrets.compare_digest(self.headers.get("X-Token", ""), TOKEN):
@@ -688,6 +690,9 @@ class Handler(BaseHTTPRequestHandler):
             os.makedirs(REPORTS, exist_ok=True)
             os.startfile(REPORTS)
             return 200, {"ok": True}
+        elif path == "/api/show":  # un secondo avvio di LagDoctor chiede di riaprire la finestra
+            threading.Thread(target=show_window, daemon=True).start()
+            return 200, {"ok": True}
         elif path == "/api/quit":
             threading.Thread(target=lambda: (time.sleep(0.8), _close_windows(2.0), _shutdown()), daemon=True).start()
             return 200, {"ok": True}
@@ -711,6 +716,8 @@ SERVER = None
 
 def _shutdown():
     time.sleep(0.5)
+    if TRAY is not None:
+        TRAY.stop()
     if STATE["sensor"]:
         STATE["sensor"].stop()
     try:
@@ -877,6 +884,42 @@ def _minimize_later(proc, seconds=25):
         time.sleep(0.25)
 
 
+TRAY = None
+URL = None
+
+
+def _tray_hint():
+    """Dopo la chiusura della finestra (non un semplice ricaricamento), una volta: LagDoctor e' ancora qui."""
+    bye = STATE.get("bye")
+    time.sleep(6)
+    if STATE.get("bye") == bye and STATE.get("last_req", 0) <= (bye or 0) + 0.5 and not STATE.get("tray_hint"):
+        STATE["tray_hint"] = True
+        TRAY.notify("LagDoctor e' ancora aperto", "Lo trovi qui, tra le icone vicino all'orologio. Clic per riaprirlo, "
+                                                  "tasto destro > Esci per chiuderlo.")
+
+
+def show_window():
+    """Riapre la finestra di LagDoctor, o la porta in primo piano se e' gia' aperta."""
+    wins = _lagdoctor_windows()
+    if wins:
+        try:
+            import ctypes
+            u32 = ctypes.windll.user32
+            for h in wins[:1]:
+                u32.ShowWindow(h, 9)  # SW_RESTORE
+                u32.SetForegroundWindow(h)
+            return
+        except Exception:
+            pass
+    open_window(URL)
+
+
+def quit_all():
+    """Esci dal menu dell'icona: chiude la finestra e il programma."""
+    _close_windows(2.0)
+    _shutdown()
+
+
 def open_window(url, minimized=False):
     edge_paths = [os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
                   os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe")]
@@ -903,9 +946,17 @@ def run(open_ui=True, port=0, minimized=False, from_logon=False):
     INSTANCE = paths.data("in_esecuzione.json")
     if open_ui:
         url = _existing_instance()
-        if url:  # gia' aperto: riapro solo la finestra (all'avvio di Windows non serve)
+        if url:  # gia' aperto: chiedo a quello di mostrare la finestra (all'avvio di Windows non serve)
             if not from_logon:
-                open_window(url)
+                try:
+                    import urllib.request
+                    with open(INSTANCE, encoding="utf-8") as f:
+                        tok = json.load(f)["token"]
+                    req = urllib.request.Request(url.split("/?")[0] + "/api/show", data=b"{}", method="POST",
+                                                 headers={"X-Token": tok, "Content-Type": "application/json"})
+                    urllib.request.urlopen(req, timeout=3).read()
+                except Exception:
+                    open_window(url)
             return url
     SERVER = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = "http://127.0.0.1:%d/?t=%s" % (SERVER.server_address[1], TOKEN)
@@ -915,14 +966,24 @@ def run(open_ui=True, port=0, minimized=False, from_logon=False):
     except OSError:
         pass
     threading.Thread(target=_sensor_reaper, daemon=True).start()
+    global TRAY, URL
+    URL = url
+    tray_ok = False
     if open_ui:
         threading.Thread(target=_startup_repairs, daemon=True).start()
-    if (paths.FROZEN or from_logon) and open_ui:
-        threading.Thread(target=_auto_exit, daemon=True).start()
+        # icona vicino all'orologio: chiudere la finestra con la X non chiude il programma
+        TRAY = tray.Tray(os.path.join(UI_DIR, "lagdoctor.ico"), on_open=show_window, on_quit=quit_all,
+                         tooltip="LagDoctor " + __version__)
+        try:
+            tray_ok = TRAY.start()
+        except Exception:
+            tray_ok = False
+    if (paths.FROZEN or from_logon) and open_ui and not tray_ok:
+        threading.Thread(target=_auto_exit, daemon=True).start()  # senza icona: si chiude con la finestra
     print("\n  LagDoctor e' aperto in una finestra a parte.")
     print("  NON chiudere questa finestra nera finche' usi LagDoctor (chiudila per uscire).")
     print("  Se la finestra non si e' aperta, copia questo indirizzo nel browser:\n  " + url + "\n")
-    if open_ui:
+    if open_ui and not (minimized and from_logon and tray_ok):  # ridotto a icona all'avvio: solo l'icona
         open_window(url, minimized)
     try:
         SERVER.serve_forever()

@@ -952,7 +952,8 @@ async function settingsDialog() {
       <div class="grow"><b>${title}</b><div class="mut" style="font-size:13px">${txt}</div></div></div>`;
   const m = modal(`<h2>Impostazioni</h2>
     ${row("set-auto", "Avvia LagDoctor con Windows", "LagDoctor si apre da solo circa 15 secondi dopo l'accesso a Windows, gia' con i permessi di amministratore (nessuna richiesta di conferma). L'hardware non viene riletto: le impostazioni si controllano in background.", s.autostart)}
-    ${row("set-min", "Ridotto a icona", "All'avvio con Windows la finestra resta ridotta nella barra delle applicazioni: la apri quando ti serve.", s.minimized, !s.autostart)}
+    ${row("set-min", "Ridotto a icona", "All'avvio con Windows LagDoctor parte solo come icona vicino all'orologio, senza aprire la finestra: clicca l'icona quando ti serve.", s.minimized, !s.autostart)}
+    <p class="mut" style="font-size:12.5px">Chiudendo la finestra con la X, LagDoctor resta acceso tra le icone vicino all'orologio (in basso a destra). Per chiuderlo davvero: tasto destro sull'icona &gt; <b>Esci</b>, oppure il pulsante Esci qui a sinistra.</p>
     ${s.autostart && !s.task ? '<p style="color:#e8a23a;font-size:13px">L\'avvio con Windows non risulta attivo: riattivalo.</p>' : ""}
     <p class="mut" style="font-size:12px">La game mode ha un suo avvio automatico separato (pagina Game mode): funziona anche con LagDoctor chiuso.</p>
     <div class="row" style="justify-content:flex-end"><button class="ghost" id="m-close">Chiudi</button></div>`);

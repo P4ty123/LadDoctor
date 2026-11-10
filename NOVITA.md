@@ -1,3 +1,10 @@
+## LagDoctor 5.9.0
+
+- Icona di LagDoctor vicino all'orologio (in basso a destra). Chiudendo la finestra con la X il programma resta
+  acceso li': clic sull'icona per riaprirlo, tasto destro > Esci per chiuderlo davvero.
+- Avvio con Windows "ridotto a icona": parte solo come icona, senza aprire la finestra.
+- Aprendo LagDoctor quando e' gia' acceso, la sua finestra torna in primo piano (niente finestre doppie).
+
 ## LagDoctor 5.8.2
 
 - Aggiornamenti: al posto dell'elenco di messaggi ripetuti c'e' una barra che si riempie, con la percentuale accanto.

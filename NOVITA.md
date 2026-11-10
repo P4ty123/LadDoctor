@@ -1,3 +1,12 @@
+## LagDoctor 5.8.0 - nuova grafica
+
+- Nuovo stile "gaming neon": sfondo scuro con riflessi viola e azzurri, riquadri in vetro, pulsanti con sfumatura,
+  carattere Inter incluso nel programma (stesso aspetto anche senza internet).
+- Panoramica rinnovata: punteggio del PC (indicativo, da 0 a 100: scende per ogni impostazione da correggere e per
+  ogni problema del controllo rapido), riquadro della game mode con quello che sta facendo, sensori della scheda
+  video con barre, avvisi di throttling, controllo rapido compatto con "Perche' e come risolvere".
+- Tutte le pagine adottano il nuovo stile.
+
 ## LagDoctor 5.7.7
 
 - Aggiornamento: la finestra della versione vecchia ora viene chiusa PRIMA di avviare l'installatore (prima

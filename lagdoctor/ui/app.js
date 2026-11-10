@@ -61,7 +61,8 @@ function bindRecTabs() {
 
 async function refreshState() {
   S.state = await api("/api/state");
-  if (S.state.version) $("#app-ver").textContent = "v" + S.state.version;
+  if (S.state.version) $("#app-ver").textContent = "v" + S.state.version + " · stutter & lag";
+  const gmNav = $("#nav-gm"); if (gmNav && S.state.gm) gmNav.hidden = !S.state.gm.active;
   $("#nav-exp").hidden = !S.state.experiment;
   const rb = S.state.reboot || [], bar = $("#reboot-bar");
   bar.hidden = !rb.length;
@@ -102,47 +103,99 @@ function bindFixButtons(root) {
 }
 
 /* ------------------------------------------------------------------ PANORAMICA */
+const SEV_TXT = { 3: ["ALTA", "s3"], 2: ["MEDIA", "s2"], 1: ["BASSA", "s1"] };
+/* punteggio indicativo: 100 meno le impostazioni che tolgono prestazioni e i problemi trovati */
+function pcScore(fixN, probs) {
+  let s = 100 - Math.min(fixN * 4, 40);
+  (probs || []).forEach((p) => { s -= p.gravita >= 3 ? 10 : p.gravita === 2 ? 5 : 2; });
+  return Math.max(5, Math.min(100, Math.round(s)));
+}
+function scoreText(score, fixN, probs) {
+  const hi = (probs || []).filter((p) => p.gravita >= 3).length;
+  const title = score >= 85 ? "PC in ottima forma" : score >= 65 ? "PC in buona forma" : score >= 45 ? "Qualcosa da sistemare" : "Ci sono diversi problemi";
+  const parts = [];
+  parts.push(fixN ? `${fixN} impostazion${fixN === 1 ? "e ti toglie" : "i ti tolgono"} prestazioni.` : "Nessuna impostazione dannosa attiva.");
+  parts.push(hi ? `${hi} problem${hi === 1 ? "a importante" : "i importanti"} nel controllo rapido.` : (probs || []).length ? `${probs.length} consigli nel controllo rapido.` : "Nessun problema trovato.");
+  return { title, text: parts.join("<br>") };
+}
+function gmHomeHtml(gm) {
+  if (!gm) return "";
+  let st, cls, items = [];
+  if (!gm.enabled) { st = "Game mode spenta"; cls = ""; items = ["Accendila: quando apri un gioco Windows si concentra su di lui", "Si spegne da sola quando chiudi il gioco"]; }
+  else if (gm.active) {
+    st = "Game mode attiva · " + (gm.games || []).join(", "); cls = "on";
+    items = (gm.actions || []).filter((a) => !/^Game mode ATTIVA/.test(a)).slice(-4).map((a) => a.length > 70 ? a.slice(0, 68) + "…" : a);
+  } else if (gm.running) { st = "Game mode pronta"; cls = "wait"; items = [`Controllo ${gm.n_games} giochi`, "Si attiva da sola quando apri un gioco"]; }
+  else { st = "Game mode accesa ma non in esecuzione"; cls = ""; items = ["Apri la pagina Game mode per riavviarla"]; }
+  return `<div class="card gmcard"><div class="st"><span class="gdot ${cls}"></span>${esc(st)}</div>
+    <ul>${items.map((x) => "<li>" + esc(x) + "</li>").join("")}</ul>
+    <div class="acts"><button class="ghost sm" data-go="gamemode">${gm.enabled ? "Apri game mode" : "Accendi la game mode"}</button></div></div>`;
+}
+function quickHtml(list) {
+  if (!list || !list.length) return '<div class="mut" style="padding:8px 0">Nessun problema trovato.</div>';
+  return list.slice().sort((a, b) => b.gravita - a.gravita).map((p) => `
+    <div class="prob"><div class="prob-h"><span class="sev ${SEV_TXT[p.gravita][1]}">${SEV_TXT[p.gravita][0]}</span><b class="grow" style="font-weight:500">${esc(p.titolo)}</b>
+      ${p.auto_fix ? `<button class="sm" data-fix='${esc(JSON.stringify(p.auto_fix))}'>Correggi</button>` : ""}</div>
+      <details style="margin:0"><summary style="margin:6px 0 0;font-size:12.5px">Perche' e come risolvere</summary>
+      <p class="mut" style="font-size:13px;margin:6px 0 0">${esc(p.spiegazione)}</p><p class="fix" style="font-size:13px">${esc(p.soluzione)}</p></details>
+    </div>`).join("");
+}
 async function home() {
   await refreshState(); await loadCatalog();
   const si = S.state.sysinfo || {}, g = si.gpu || {};
-  const fixN = toFix().length;
+  const fixN = toFix().length, probs = S.state.problems || [];
+  const score = pcScore(fixN, probs), st = scoreText(score, fixN, probs);
   main().innerHTML = `
     <h1>Panoramica</h1><p class="sub">Il tuo PC in breve e le cose piu' importanti da fare.</p>
     ${S.state.experiment ? `<div class="banner"><b>Test prima/dopo in corso</b> su ${esc(S.state.experiment.gioco)}: quando sei pronto registra la partita DOPO. <button class="sm" data-go="exp">Vai</button></div>` : ""}
-    ${!S.state.admin ? '<div class="banner">LagDoctor non ha i permessi di amministratore: avvialo da AVVIA.bat e rispondi Si.</div>' : ""}
-    <h2 style="margin-top:6px">Scheda video in tempo reale</h2>
+    ${!S.state.admin ? '<div class="banner">LagDoctor non ha i permessi di amministratore: avvialo di nuovo e rispondi Si.</div>' : ""}
+    <div class="hero">
+      ${S.booting ? `<div class="card">${bootCardHtml()}</div>` : `<div class="card score">
+        <div class="ring ${score >= 65 ? "" : score >= 45 ? "mid" : "low"}" style="--p:${score}"><div><div><b>${score}</b><small>su 100</small></div></div></div>
+        <div><h3>${st.title}</h3><p>${st.text}</p>
+        ${fixN ? `<button data-go="tweaks">Correggi ora</button>` : `<button class="ghost" data-go="record">Analizza un gioco</button>`}</div></div>`}
+      ${gmHomeHtml(S.state.gm)}
+    </div>
     <div class="sensors" id="home-sensors"></div>
-    <h2>Il tuo PC</h2>
-    <div class="grid">
-      <div class="card kpi"><small>Processore</small><b>${esc(si.cpu || "?")}</b></div>
-      <div class="card kpi"><small>Scheda video</small><b>${esc(g.name || "?")}</b><span class="mut">${g.vram_mb ? g.vram_mb + " MB VRAM" : ""}</span></div>
-      <div class="card kpi"><small>RAM</small><b>${esc(si.ram || "?")}</b></div>
-      <div class="card kpi"><small>Monitor</small><b>${si.refresh_hz ? si.refresh_hz + " Hz" : "?"}</b></div>
-    </div>
-    <h2>Cosa fare</h2>
-    <div class="grid">
-      <div class="card"><b>1. Scansione completa</b><p class="mut">Legge hardware, Windows, driver, errori e ogni impostazione.</p><button data-go="scan">Avvia scansione</button></div>
-      <div class="card"><b>2. Impostazioni da correggere</b><p class="mut">${S.booting ? "Sto leggendo le impostazioni del sistema..." : fixN ? fixN + " impostazioni ti stanno togliendo prestazioni." : "Nessuna impostazione dannosa trovata."}</p><button data-go="tweaks" ${fixN ? "" : 'class="ghost"'}>Apri ottimizzazioni</button></div>
-      <div class="card"><b>3. Analizza un gioco</b><p class="mut">Registra una partita e scopri la causa degli stutter.</p><button data-go="record">Analizza</button></div>
-    </div>
-    <h2>Controllo rapido</h2>${S.booting ? bootCardHtml() : probHtml(S.state.problems)}
-    <p class="mut">Modifiche applicate da LagDoctor: ${S.state.applied}</p>`;
+    <div class="two">
+      <div class="card"><h4>Il tuo PC</h4><div class="kv">
+        <div><span>Processore</span><b>${esc(si.cpu || "?")}</b></div>
+        <div><span>Scheda video</span><b>${esc(g.name || "?")}${g.vram_mb && !g.integrated ? " · " + Math.round(g.vram_mb / 1024) + " GB" : ""}</b></div>
+        <div><span>RAM</span><b>${esc(si.ram || "?")}</b></div>
+        <div><span>Monitor</span><b>${si.refresh_hz ? si.refresh_hz + " Hz" : "?"}</b></div>
+        <div><span>Modifiche di LagDoctor</span><b>${S.state.applied} attive</b></div></div>
+        <div class="row" style="margin-top:12px"><button class="ghost sm" data-go="scan">Scansione completa</button><button class="ghost sm" data-go="record">Analizza un gioco</button></div></div>
+      <div class="card quick"><h4>Controllo rapido</h4>${S.booting ? '<div class="mut" style="padding:8px 0">Sto leggendo le impostazioni del sistema...</div>' : quickHtml(probs)}</div>
+    </div>`;
   $$("[data-go]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.go === "tweaks") S.filter = "fix"; if (b.dataset.go === "record") S.recTab = "rec"; go(b.dataset.go); }));
   bindFixButtons(main());
   startSensors($("#home-sensors"));
 }
 
-const SENSOR_ITEMS = [["gpu_util", "Utilizzo", "%"], ["vram_used", "VRAM usata", " MB"], ["gpu_temp", "Temperatura", " °C"],
-  ["gpu_hotspot", "Hotspot", " °C"], ["gpu_clock", "Frequenza", " MHz"], ["gpu_power", "Consumo", " W"],
-  ["thr_thermal", "Throttling termico", ""], ["thr_power", "Limite potenza", ""]];
+const SENSOR_MAIN = [
+  ["gpu_util", "Utilizzo GPU", (d) => fmt(d.gpu_util) + "%", (d) => d.gpu_util],
+  ["gpu_temp", "Temperatura", (d) => fmt(d.gpu_temp) + " °C" + (d.gpu_hotspot != null ? ` <span class="mut" style="font-size:13px;font-weight:500">hotspot ${fmt(d.gpu_hotspot)}</span>` : ""), (d) => d.gpu_temp == null ? null : Math.min(100, d.gpu_temp / 0.9)],
+  ["vram_used", "Memoria video", (d) => d.vram_total ? `${fmt(d.vram_used / 1024, 1)} / ${fmt(d.vram_total / 1024, 0)} GB` : `${fmt(d.vram_used / 1024, 1)} GB`, (d) => d.vram_total ? d.vram_used / d.vram_total * 100 : null],
+  ["gpu_clock", "Frequenza", (d) => fmt(d.gpu_clock) + " MHz" + (d.gpu_power != null ? ` <span class="mut" style="font-size:13px;font-weight:500">${fmt(d.gpu_power)} W</span>` : ""), () => null],
+];
 function startSensors(box) {
-  box.innerHTML = SENSOR_ITEMS.map(([k, l]) => `<div class="card kpi"><small>${l}</small><b id="s-${k}">–</b></div>`).join("");
+  box.innerHTML = SENSOR_MAIN.map(([k, l]) => `<div class="card kpi"><small>${l}</small><b id="s-${k}">–</b><div class="meter" id="m-${k}"><span></span></div></div>`).join("");
+  const flags = document.createElement("div"); flags.className = "sens-flags"; box.after(flags);
   const tick = async () => {
     if (!document.body.contains(box)) return clearInterval(S.sensorTimer);
     try {
       const r = await api("/api/sensors");
       if (!r.available) { box.innerHTML = '<div class="mut" style="grid-column:1/-1">Non riesco a leggere i sensori della scheda video (aggiorna il driver o avvia LagDoctor come amministratore).</div>'; return clearInterval(S.sensorTimer); }
-      SENSOR_ITEMS.forEach(([k, , u]) => { const v = r.data[k], el = $("#s-" + k); if (el) el.textContent = typeof v === "boolean" ? (v ? "SI" : "no") : v == null ? "–" : fmt(v) + u; });
+      const d = r.data || {};
+      SENSOR_MAIN.forEach(([k, , val, pct]) => {
+        const el = $("#s-" + k), m = $("#m-" + k);
+        if (!el) return;
+        el.innerHTML = d[k] == null ? "–" : val(d);
+        const p = d[k] == null ? null : pct(d);
+        m.style.visibility = p == null ? "hidden" : "visible";
+        if (p != null) { $("span", m).style.width = Math.max(2, Math.min(100, p)) + "%"; m.classList.toggle("hot", (k === "gpu_temp" && d.gpu_temp >= 83) || (k === "vram_used" && p >= 95)); }
+      });
+      flags.innerHTML = (d.thr_thermal ? '<span class="badge b-bad">Throttling termico</span>' : "") + (d.thr_power ? '<span class="badge b-warn">Al limite di potenza</span>' : "");
     } catch (e) { /* ignora */ }
   };
   clearInterval(S.sensorTimer); tick(); S.sensorTimer = setInterval(tick, 1000);

@@ -96,7 +96,7 @@ OPTIONS = [
      "La marcatura aiuta solo se il router rispetta la QoS/DSCP; non fa mai danni."),
     ("power_plan", False, "Piano energetico Prestazioni elevate durante il gioco",
      "Attiva il piano 'Prestazioni elevate' solo mentre giochi e rimette il tuo piano alla fine.",
-     "Se usi gia' un piano personalizzato (es. EXM) lascialo disattivato."),
+     "Se usi gia' un piano energetico personalizzato (di un programma di ottimizzazione o creato da te), lascialo disattivato."),
     ("close_shell", False, "Chiudi Esplora risorse (modalita' Xbox completa)",
      "Come la modalita' Xbox: chiude Esplora risorse, barra delle applicazioni, Start e ricerca mentre giochi "
      "(circa 150-400 MB di RAM e qualche processo in meno). Vengono riaperti quando chiudi il gioco.",
@@ -966,6 +966,16 @@ def recover():
         Engine().deactivate("ripristino da LagDoctor")
         return True
     return False
+
+
+def quick_status():
+    """Per la Panoramica: accesa? attiva su quali giochi? cosa ha fatto? (lettura veloce, solo file)."""
+    c = load_config()
+    st = _load(STATUS, {})
+    running = bool(st.get("pid")) and psutil.pid_exists(st["pid"]) if st.get("pid") else False
+    return {"enabled": bool(c.get("enabled")), "running": running, "active": bool(running and st.get("active")),
+            "games": st.get("games") or [], "actions": (st.get("actions") or [])[-12:],
+            "n_games": sum(1 for g in c.get("games", []) if g.get("on"))}
 
 
 def status():

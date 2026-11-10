@@ -26,7 +26,8 @@ from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
 UI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui")
 TOKEN = secrets.token_urlsafe(24)
 MIME = {".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
-        ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json"}
+        ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".json": "application/json",
+        ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8"}
 
 
 def log_error():
@@ -228,6 +229,13 @@ def job_update(job):
     updater.install(path)
     threading.Thread(target=lambda: (time.sleep(1), _shutdown()), daemon=True).start()
     return {"msg": "Installazione avviata", "restarting": True}
+
+
+def _gm_quick():
+    try:
+        return gamemode.quick_status()
+    except Exception:
+        return None
 
 
 def gamemode_json(scan=False):
@@ -541,7 +549,8 @@ class Handler(BaseHTTPRequestHandler):
                     "booting": boot.status == "running" if boot else False,
                     "boot_msg": boot.messages[-1] if boot and boot.messages else None,
                     "hw_cached": STATE.get("hw_cached", False),
-                    "version": __version__, "installed": paths.FROZEN, "data_dir": paths.DATA_DIR}
+                    "version": __version__, "installed": paths.FROZEN, "data_dir": paths.DATA_DIR,
+                    "gm": _gm_quick()}
         if path == "/api/job":
             job = JOBS.get(qs.get("id", [""])[0])
             return job.as_dict() if job else {"status": "missing"}

@@ -35,3 +35,4 @@ Doppio clic su `AVVIA.bat` (installa Python e psutil se mancano).
 ## Licenze
 
 PresentMon (incluso in `strumenti/`) e' di Intel, licenza MIT: vedi `strumenti/PresentMon-LICENSE.txt`.
+Il carattere Inter (in `lagdoctor/ui/fonts/`) e' distribuito con licenza SIL Open Font License 1.1: vedi `lagdoctor/ui/fonts/OFL.txt`.

@@ -908,7 +908,9 @@ async function updateDialog(u) {
   else if (!u.available) body = `${ver}<p>Hai gia' l'ultima versione.</p>`;
   else if (!u.installed) body = `${ver}<p>C'e' una versione nuova. L'aggiornamento automatico funziona nella versione <b>installata</b> (LagDoctor-Setup.exe): scaricala dalla pagina delle versioni e installala una volta, poi gli aggiornamenti saranno automatici.</p>${u.notes ? `<h3>Novita'</h3><div class="notes">${esc(u.notes)}</div>` : ""}`;
   else body = `${ver}<h3>Novita'</h3><div class="notes">${esc(u.notes || "Nessuna descrizione.")}</div><p class="mut" style="font-size:13px">LagDoctor scarica l'installatore, controlla che il file sia integro, si chiude e si riapre aggiornato (circa 1 minuto). Le modifiche applicate, i backup e i report restano. Se la game mode e' accesa viene fermata (ripristinando tutto) e riparte da sola.</p>`;
-  const m = modal(`<h2>Aggiornamenti</h2>${body}<ul class="log" id="upd-log"></ul>
+  const m = modal(`<h2>Aggiornamenti</h2>${body}
+    <div class="upd-prog" id="upd-prog" hidden><div class="upd-step" id="upd-step">Avvio...</div>
+      <div class="upd-line"><div class="upd-track"><span id="upd-fill"></span></div><b id="upd-pct">0%</b></div></div>
     <div class="row" style="justify-content:flex-end">${!u.installed || u.error || !u.available ? `<button class="ghost" id="upd-page">Pagina delle versioni</button>` : ""}<button class="ghost" id="m-close">Chiudi</button>${u.available && u.installed ? '<button id="upd-go">Aggiorna ora</button>' : ""}</div>`);
   $("#m-close", m).onclick = closeModal;
   const pg = $("#upd-page", m); if (pg) pg.onclick = () => window.open(u.page, "_blank");
@@ -916,13 +918,26 @@ async function updateDialog(u) {
   if (go) go.onclick = async () => {
     go.disabled = true; $("#m-close", m).disabled = true; go.textContent = "Aggiorno...";
     try {
-      const job = await runJob(api("/api/update/install", {}), (j) => logList($("#upd-log", m), j.messages));
+      $("#upd-prog", m).hidden = false;
+      const job = await runJob(api("/api/update/install", {}), (j) => updProgress(m, j.messages[j.messages.length - 1] || ""));
+      updProgress(m, "fatto");
       if (job.result && job.result.restarting) {
         m.innerHTML = '<h2>Installazione in corso...</h2><div class="spinner"></div><p>Questa finestra si chiude ora: LagDoctor si riapre da solo, aggiornato, tra circa un minuto.</p>';
         setTimeout(() => { try { window.close(); } catch (e) { /* ci pensa il programma */ } }, 1500);
       } else { toast(job.result && job.result.msg || "Fatto"); closeModal(); }
     } catch (e) { toast("Aggiornamento non riuscito: " + e.message, 9000); go.disabled = false; $("#m-close", m).disabled = false; go.textContent = "Riprova"; }
   };
+}
+/* barra di avanzamento dell'aggiornamento: un solo passo alla volta, con la percentuale */
+function updProgress(m, msg) {
+  let pct = 3, step = "Controllo l'ultima versione...";
+  const d = /(\d+)%\s*$/.exec(msg);
+  if (/^Scarico/.test(msg)) { const p = d ? +d[1] : 0; pct = 5 + p * 0.85; step = "Scarico LagDoctor " + (/Scarico LagDoctor (\S+)/.exec(msg) || [, ""])[1].replace(/\.\.\.$/, ""); }
+  else if (/controllato|installo|Chiudo/i.test(msg)) { pct = 95; step = "File controllato: installo..."; }
+  else if (msg === "fatto") { pct = 100; step = "Installazione avviata"; }
+  const f = $("#upd-fill", m), t = $("#upd-pct", m), s = $("#upd-step", m);
+  if (!f) return;
+  f.style.width = Math.round(pct) + "%"; t.textContent = Math.round(pct) + "%"; s.textContent = step;
 }
 $("#btn-update").onclick = () => updateDialog(null);
 /* anche con LagDoctor aperto: ricontrollo ogni 15 minuti */

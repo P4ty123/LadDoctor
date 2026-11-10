@@ -1,3 +1,7 @@
+## LagDoctor 5.8.2
+
+- Aggiornamenti: al posto dell'elenco di messaggi ripetuti c'e' una barra che si riempie, con la percentuale accanto.
+
 ## LagDoctor 5.8.1
 
 - Corrette le linee chiare che lampeggiavano su alcuni riquadri (es. game mode e memoria video): erano causate

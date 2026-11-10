@@ -210,3 +210,12 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .upd-dot{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none;box-shadow:0 0 0 0 rgba(46,229,157,.7);animation:upd-pulse 2s infinite}
 .upd-dot[hidden]{display:none}
 @keyframes upd-pulse{0%{box-shadow:0 0 0 0 rgba(46,229,157,.65)}70%{box-shadow:0 0 0 7px rgba(46,229,157,0)}100%{box-shadow:0 0 0 0 rgba(46,229,157,0)}}
+
+/* barra di avanzamento dell'aggiornamento */
+.upd-prog{margin:16px 0 18px}
+.upd-prog[hidden]{display:none}
+.upd-step{font-size:13px;color:var(--mut);margin-bottom:8px}
+.upd-line{display:flex;align-items:center;gap:12px}
+.upd-track{flex:1;height:10px;border-radius:10px;background:rgba(255,255,255,.08);overflow:hidden}
+.upd-track span{display:block;height:100%;width:0;border-radius:10px;background:var(--grad);box-shadow:0 0 14px rgba(0,212,255,.45);transition:width .35s}
+.upd-line b{min-width:44px;text-align:right;font-variant-numeric:tabular-nums}

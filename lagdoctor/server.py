@@ -218,7 +218,7 @@ def job_update(job):
     last = [-10]
 
     def prog(pct):
-        if pct - last[0] >= 10:
+        if pct - last[0] >= 2:
             last[0] = pct
             job.msg("Scarico LagDoctor %s... %d%%" % (info["latest"], pct))
     path = updater.download(info, prog)

@@ -259,7 +259,10 @@ def gamemode_post(b):
     if act == "enable":
         gamemode.enable()
     elif act == "disable":
-        gamemode.disable()
+        msg = gamemode.disable()
+        res = gamemode_json()
+        res["msg"] = msg
+        return res
     elif act == "game":
         for g in c["games"]:
             if g["id"] == b.get("id"):

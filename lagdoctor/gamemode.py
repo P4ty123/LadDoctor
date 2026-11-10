@@ -1069,6 +1069,10 @@ def enable():
 
 
 def disable():
+    """Spegne la game mode. Restituisce il messaggio giusto: cosa e' stato annullato davvero."""
+    st = _load(STATUS, {})
+    was_active = bool(st.get("active")) and bool(daemon_pid())
+    n_ifeo = len(_load(IFEO_FILE, {}))
     c = load_config()
     c["enabled"] = False
     save_config(c)  # il programma invisibile se ne accorge, ripristina tutto e si chiude
@@ -1088,7 +1092,11 @@ def disable():
         except psutil.Error:
             pass
     recover()
-    return True
+    if was_active:
+        return "Game mode spenta: ottimizzazioni del gioco annullate"
+    if n_ifeo:
+        return "Game mode spenta: tolta la priorita' impostata per i giochi con anti-cheat"
+    return "Game mode spenta"
 
 
 STOP_FLAG = os.path.join(ROOT, "gamemode_ferma.flag")

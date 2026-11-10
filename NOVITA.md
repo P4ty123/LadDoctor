@@ -1,3 +1,8 @@
+## LagDoctor 5.11.1
+
+- Spegnendo la game mode il messaggio dice cosa e' stato annullato davvero: "Game mode spenta" se non c'era niente
+  da annullare, "ottimizzazioni del gioco annullate" solo se un gioco era aperto.
+
 ## LagDoctor 5.11.0
 
 - Game mode: priorita' bassa anche per disco e memoria dei programmi in background. Quando il gioco carica dati dal

@@ -579,13 +579,13 @@ async function gamemodePage(scanAgain) {
     <p class="mut" style="font-size:12px">Niente priorita' "In tempo reale": puo' bloccare mouse, tastiera e audio.</p>`;
 
   const post = async (body, msg) => {
-    try { await api("/api/gamemode", body); if (msg) toast(msg); }
+    try { const r = await api("/api/gamemode", body); if (r && r.msg) toast(r.msg); else if (msg) toast(msg); }
     catch (e) { toast("Errore: " + e.message); }
     gamemodePage();
   };
   const on = $("#gm-on"), off = $("#gm-off");
   if (on) on.onclick = () => { on.disabled = true; on.textContent = "Accendo..."; post({ action: "enable" }, "Game mode accesa"); };
-  if (off) off.onclick = () => { off.disabled = true; off.textContent = "Spengo e ripristino..."; post({ action: "disable" }, "Game mode spenta: tutto ripristinato"); };
+  if (off) off.onclick = () => { off.disabled = true; off.textContent = "Spengo e ripristino..."; post({ action: "disable" }); };
   $("#gm-scan").onclick = () => { $("#gm-scan").textContent = "Cerco..."; gamemodePage(true); };
   $("#gm-add").onclick = gmAdd;
   $$("[data-on]").forEach((x) => x.onchange = () => post({ action: "game", id: x.dataset.on, on: x.checked }));

@@ -1,3 +1,8 @@
+## LagDoctor 5.14.0
+
+- Ottimizzazioni: pulsante "Ignora" su ogni voce e nuova sezione "Ignorate". Le voci ignorate non compaiono tra
+  quelle da correggere o consigliate e non contano nel punteggio del PC; con "Non ignorare" tornano al loro posto.
+
 ## LagDoctor 5.13.4
 
 - Il progetto su GitHub ora si chiama LagDoctor (prima LadDoctor): aggiornamenti e collegamenti usano il nome nuovo.

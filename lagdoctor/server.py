@@ -135,8 +135,9 @@ def driver_report(fresh=True):
         return {"ok": False, "vendor": vendor(), "error": str(e)}
 
 
-def tweak_json(t, st, applied, sysinfo):
+def tweak_json(t, st, applied, sysinfo, ignored=frozenset()):
     return {"id": t.id, "name": t.name, "cat": t.cat, "desc": t.desc, "efficacy": t.efficacy, "risk": t.risk,
+            "ignored": t.id in ignored,
             "risk_label": tweaks.RISK[t.risk], "reboot": t.reboot, "warning": t.warning, "kind": t.kind,
             "harm_if_off": t.harm_if_off, "group": t.group, "source": t.source,
             "recommended": t.recommended(sysinfo), "status": st.get(t.id), "applied": t.id in applied,
@@ -147,7 +148,8 @@ def tweak_json(t, st, applied, sysinfo):
 def catalog_json():
     st = STATE["statuses"]
     applied = tweaks.applied_by_us()
-    return {"tweaks": [tweak_json(t, st, applied, STATE["sysinfo"]) for t in tweaks.for_vendor(vendor())],
+    ign = tweaks.ignored()
+    return {"tweaks": [tweak_json(t, st, applied, STATE["sysinfo"], ign) for t in tweaks.for_vendor(vendor())],
             "myths": [{"name": n, "why": w} for n, w in tweaks.NOT_TOGGLEABLE],
             "manual": [{"name": n, "how": h, "source": src} for n, h, src in tweaks.MANUAL_TIPS],
             "checked": bool(st)}
@@ -546,8 +548,10 @@ class Handler(BaseHTTPRequestHandler):
             boot = JOBS.get(STATE.get("boot_job") or "")
             exp = sessions.experiment()
             applied = set(tweaks.applied_by_us())
-            probs = [p for p in STATE["sys_problems"]  # togli i problemi gia' corretti
-                     if not (p.get("fix_id") and (p["fix_id"] in applied or STATE["statuses"].get(p["fix_id"]) is True))]
+            ign = tweaks.ignored()
+            probs = [p for p in STATE["sys_problems"]  # togli i problemi gia' corretti o ignorati
+                     if not (p.get("fix_id") and (p["fix_id"] in applied or p["fix_id"] in ign or
+                                                  STATE["statuses"].get(p["fix_id"]) is True))]
             return {"sysinfo": STATE["sysinfo"], "problems": probs, "experiment": exp,
                     "applied": len(tweaks.applied_by_us()), "busy": STATE["busy"],
                     "admin": _is_admin(), "reboot": reboot_pending(),
@@ -678,6 +682,12 @@ class Handler(BaseHTTPRequestHandler):
             return 200, {"ok": True}
         elif path == "/api/experiment/end":
             sessions.end_experiment()
+            return 200, {"ok": True}
+        elif path == "/api/ignore":
+            tid = b.get("id")
+            if tid not in tweaks.BY_ID:
+                return 400, {"error": "voce sconosciuta"}
+            tweaks.set_ignored(tid, bool(b.get("ignore", True)))
             return 200, {"ok": True}
         elif path == "/api/force_off":
             tid = b.get("id")

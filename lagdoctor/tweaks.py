@@ -1300,6 +1300,30 @@ def save_state(state):
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
+def _ignored_file():
+    return os.path.join(ROOT or ".", "ignorate.json")
+
+
+def ignored():
+    """Voci che l'utente ha deciso di ignorare (non contano tra 'da correggere' ne' nel punteggio)."""
+    try:
+        with open(_ignored_file(), encoding="utf-8") as f:
+            return set(json.load(f))
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def set_ignored(tid, ignore=True):
+    ids = ignored()
+    if ignore:
+        ids.add(tid)
+    else:
+        ids.discard(tid)
+    with open(_ignored_file(), "w", encoding="utf-8") as f:
+        json.dump(sorted(ids), f, indent=1)
+    return ids
+
+
 def applied_by_us():
     return [k for k in load_state().keys() if not k.startswith("_")]
 

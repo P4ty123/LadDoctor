@@ -256,10 +256,13 @@ function scan() {
 const EFF = { alta: 0, media: 1, bassa: 2, comfort: 3, dubbia: 4, sconsigliata: 5 };
 const MYTH_CAT = "Non affidabili (miti)";
 const tws = () => (S.catalog ? S.catalog.tweaks : []);
+/* voci che l'utente ha deciso di ignorare: compaiono solo in "Ignorate" e non contano nel punteggio */
+const twsActive = () => tws().filter((t) => !t.ignored);
+const ignoredList = () => tws().filter((t) => t.ignored);
 /* attiva = gia' impostata (da Windows, da te o da LagDoctor) */
 const isOn = (t) => t.applied || t.status === true;
 function toFix() {
-  const list = tws().filter((t) => !t.applied && (
+  const list = twsActive().filter((t) => !t.applied && (
     (t.status === false && ((t.kind === "fix" && t.recommended !== false) || t.harm_if_off)) ||
     (t.kind === "myth" && t.status === true)));
   /* mito attivo + sua correzione = stesso problema: tengo solo il mito (che si disattiva) */
@@ -268,7 +271,7 @@ function toFix() {
 }
 function notActive() {
   const fx = new Set(toFix().map((t) => t.id)), groups = new Set(toFix().map((t) => t.group).filter(Boolean));
-  return tws().filter((t) => !fx.has(t.id) && !isOn(t) && t.kind !== "fix" && t.kind !== "myth" && !(t.group && groups.has(t.group)));
+  return twsActive().filter((t) => !fx.has(t.id) && !isOn(t) && t.kind !== "fix" && t.kind !== "myth" && !(t.group && groups.has(t.group)));
 }
 function statusBadge(t) {
   if (t.applied) return t.kind === "myth" ? '<span class="badge b-bad">attivata da LagDoctor</span>' : '<span class="badge b-acc">applicata da LagDoctor</span>';
@@ -283,7 +286,7 @@ function statusBadge(t) {
 const riskCls = ["b-ok", "b-acc", "b-warn", "b-bad"];
 const effCls = { alta: "b-ok", media: "b-ok", bassa: "", comfort: "", dubbia: "b-warn", sconsigliata: "b-bad" };
 /* si puo' spuntare solo cio' che non e' gia' attivo */
-const selectable = (t) => !isOn(t);
+const selectable = (t) => !isOn(t) && !t.ignored;
 
 async function tweaksPage() {
   main().innerHTML = '<div class="loading"><div class="spinner"></div><p>Carico le impostazioni...</p></div>';
@@ -303,6 +306,7 @@ async function tweaksPage() {
         <span class="chip" data-f="on">Attive</span>
         <span class="chip" data-f="myth">Non affidabili</span>
         <span class="chip" data-f="all">Tutte</span>
+        <span class="chip" data-f="ign">Ignorate (${ignoredList().length})</span>
       </div>
       <span class="grow"></span>
       <input type="search" id="q" placeholder="Cerca..." style="width:200px">
@@ -338,6 +342,8 @@ function visible() {
   const q = ($("#q")?.value || "").toLowerCase(), cat = $("#f-cat")?.value, risk = $("#f-risk")?.value, eff = $("#f-eff")?.value;
   const fx = new Set(toFix().map((t) => t.id)), na = new Set(notActive().map((t) => t.id));
   return tws().filter((t) => {
+    if (S.filter === "ign") { if (!t.ignored) return false; }
+    else if (t.ignored) return false;
     if (S.filter === "fix" && !fx.has(t.id)) return false;
     if (S.filter === "off" && !na.has(t.id)) return false;
     if (S.filter === "rec" && !(t.recommended && !isOn(t)) && !fx.has(t.id)) return false;
@@ -362,9 +368,25 @@ function docHtml(t) {
   </div>`;
 }
 function actionHtml(t) {
+  if (t.ignored) return `<button class="ghost sm" data-unign="${t.id}" title="Torna tra ${t.recommended === true ? "le consigliate" : "le altre voci"}">Non ignorare</button>`;
+  const ign = !t.applied && (!isOn(t) || t.kind === "myth") ? `<button class="ghost sm ign-btn" data-ign="${t.id}" title="Non mostrarla piu' tra quelle da fare: non conta nel punteggio">Ignora</button>` : "";
   if (t.applied) return `<button class="ghost sm" data-undo="${t.id}">${t.kind === "myth" ? "Disattiva" : "Annulla"}</button>`;
-  if (t.kind === "myth" && t.status === true) return `<button class="sm red" data-off="${t.id}">Disattiva</button>`;
-  return "";
+  if (t.kind === "myth" && t.status === true) return `<button class="sm red" data-off="${t.id}">Disattiva</button>` + ign;
+  return ign;
+}
+async function setIgnored(id, ignore) {
+  const t = tws().find((x) => x.id === id);
+  try {
+    await api("/api/ignore", { id, ignore });
+    if (t) t.ignored = ignore;
+    S.sel.delete(id);
+    toast(ignore ? "Ignorata: la trovi in \"Ignorate\"" : (t && t.recommended === true ? "Rimessa tra le consigliate" : "Rimessa tra le voci normali"));
+    const n = toFix().length; $("#nav-fix").hidden = !n; $("#nav-fix").textContent = n;
+    const chips = $("#filters");
+    if (chips) { $('.chip[data-f="fix"]', chips).textContent = `Da correggere (${toFix().length})`; $('.chip[data-f="off"]', chips).textContent = `Non attive (${notActive().length})`; $('.chip[data-f="ign"]', chips).textContent = `Ignorate (${ignoredList().length})`; }
+    refreshState().catch(() => {});
+    renderTweaks();
+  } catch (e) { toast("Errore: " + e.message); }
 }
 function renderTweaks() {
   $$("#filters .chip").forEach((c) => c.classList.toggle("on", c.dataset.f === S.filter));
@@ -374,12 +396,13 @@ function renderTweaks() {
   list.slice().sort((a, b) => (b.recommended === true) - (a.recommended === true) || (EFF[a.efficacy] - EFF[b.efficacy]) || a.risk - b.risk)
     .forEach((t) => (groups[t.cat] = groups[t.cat] || []).push(t));
   const order = [...new Set(tws().map((t) => t.cat))];
-  $("#tw-list").innerHTML = list.length ? order.filter((c) => groups[c]).map((c) => `
+  const ignNote = S.filter === "ign" ? `<div class="myth-note" style="background:rgba(255,255,255,.04);border-color:var(--line2)">Voci che hai deciso di ignorare: non compaiono tra quelle da correggere o consigliate e <b>non contano nel punteggio</b> del PC. Con <b>Non ignorare</b> tornano al loro posto.</div>` : "";
+  $("#tw-list").innerHTML = ignNote + (list.length ? order.filter((c) => groups[c]).map((c) => `
     <div class="tw-group"><h3>${esc(c)}</h3>
     ${c === MYTH_CAT ? `<div class="myth-note">Tweak famosi che <b>non funzionano o peggiorano</b> le prestazioni sui PC moderni. Puoi comunque attivarli per provarli (apri i dettagli per sapere cosa fanno, quando potrebbero aiutare e perche' e' meglio lasciarli disattivati). Se uno risulta ATTIVO sul tuo PC, LagDoctor ti propone di disattivarlo.</div>` : ""}
     ${groups[c].map((t) => `
       <div class="tw ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
-        ${selectable(t) ? `<input type="checkbox" ${S.sel.has(t.id) ? "checked" : ""}>` : `<span class="mut" title="gia' attiva">✓</span>`}
+        ${selectable(t) ? `<input type="checkbox" ${S.sel.has(t.id) ? "checked" : ""}>` : t.ignored ? `<span class="mut" title="ignorata">–</span>` : `<span class="mut" title="gia' attiva">✓</span>`}
         <div class="name"><b>${esc(t.name)}</b> ${t.recommended === true && !isOn(t) ? '<span class="badge b-acc">consigliata</span>' : ""}
           <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span>
           ${t.doc && !S.open.has(t.id) ? `<div class="short">${esc(t.doc.cosa)}</div>` : ""}</div>
@@ -389,7 +412,7 @@ function renderTweaks() {
         ${S.open.has(t.id) ? docHtml(t) : ""}
       </div>`).join("")}
     ${c === MYTH_CAT ? S.catalog.myths.map((m) => `<div class="tw"><span class="mut">–</span><div><b>${esc(m.name)}</b><div class="short" style="white-space:normal">${esc(m.why)}</div></div><div class="meta"><span class="badge">non attivabile</span></div></div>`).join("") : ""}
-    </div>`).join("") : '<div class="empty">Nessuna voce con questi filtri.</div>';
+    </div>`).join("") : `<div class="empty">${S.filter === "ign" ? "Nessuna voce ignorata." : "Nessuna voce con questi filtri."}</div>`);
   $$("#tw-list .tw[data-id]").forEach((row) => {
     const id = row.dataset.id, cb = $("input", row);
     if (cb) cb.addEventListener("change", (e) => { e.target.checked ? S.sel.add(id) : S.sel.delete(id); renderTweaks(); });
@@ -397,6 +420,8 @@ function renderTweaks() {
   });
   $$("[data-undo]").forEach((b) => b.addEventListener("click", () => revertIds([b.dataset.undo])));
   $$("[data-off]").forEach((b) => b.addEventListener("click", () => forceOff(b.dataset.off)));
+  $$("[data-ign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.ign, true); }));
+  $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
   const n = S.sel.size;
   $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + " (clicca sul nome di una voce per leggere cosa fa)" : "Nessuna voce selezionata. Clicca sul nome di una voce per leggere cosa fa.";
   $("#apply-btn").disabled = !n;

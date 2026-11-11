@@ -1451,6 +1451,27 @@ ACTIVE_CHECKS = {
     # telemetria: 0 o 1 (su Home/Pro lo 0 vale come 1) + pubblicita' personalizzata spenta
     "telemetry_policy": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"), 3) <= 1
                                   and _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"), 1) == 0,
+    # SystemResponsiveness: 10 o meno (0 ha lo stesso effetto, anzi piu' forte)
+    "sys_resp": lambda r: _int(r("HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
+                                 "SystemResponsiveness"), 20) <= 10,
+    # nomi 8.3: 1 = spenti su tutti i dischi, 3 = spenti su tutti tranne quello di sistema
+    "ntfs_83": lambda r: _int(r("HKLM", r"SYSTEM\CurrentControlSet\Control\FileSystem",
+                                "NtfsDisable8dot3NameCreation"), 2) in (1, 3),
+    # spegnimento rapido: qualsiasi attesa di 2 secondi o meno
+    "wait_kill_svc": lambda r: _int(r("HKLM", r"SYSTEM\CurrentControlSet\Control", "WaitToKillServiceTimeout"), 5000) <= 2000,
+    # ottimizzazioni schermo intero spente: basta il valore principale
+    "fso_off": lambda r: _int(r("HKCU", r"System\GameConfigStore", "GameDVR_FSEBehaviorMode"), 0) == 2,
+    # Recall: criterio del computer o dell'utente
+    "recall_off": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis"), 0) == 1
+                            or _int(r("HKCU", r"Software\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis"), 0) == 1,
+    # app in background: impostazione dell'utente o criterio "nega" (2)
+    "bg_apps": lambda r: _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications",
+                                "GlobalUserDisabled"), 0) == 1
+                         or _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\AppPrivacy", "LetAppsRunInBackground"), 0) == 2,
+    # Sensore memoria spento: impostazione dell'utente o criterio
+    "storage_sense_off": lambda r: _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy",
+                                          "01"), 0) == 0
+                                   or _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\StorageSense", "AllowStorageSenseGlobal"), 1) == 0,
     # menu: qualsiasi ritardo breve
     "menu_delay": lambda r: _int(r("HKCU", r"Control Panel\Desktop", "MenuShowDelay"), 400) <= 50,
     # IPv4 preferito: bit 0x20, oppure IPv6 tutto disattivato (0xFF)

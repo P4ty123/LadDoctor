@@ -1,3 +1,8 @@
+## LagDoctor 5.13.3
+
+- Stato reale anche per SystemResponsiveness (10 o meno), nomi 8.3 (1 o 3), WaitToKillServiceTimeout (2000 o meno),
+  ottimizzazioni schermo intero, Recall, app in background e Sensore memoria (anche con le altre chiavi di Windows).
+
 ## LagDoctor 5.13.2
 
 - Le ottimizzazioni gia' attive grazie ad altri programmi (es. EXM) o impostate a mano ora vengono riconosciute:

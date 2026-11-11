@@ -1,3 +1,10 @@
+## LagDoctor 5.12.0
+
+- Effetti visivi rifatti: come la finestra "Opzioni prestazioni" di Windows spegne tutte le caselle (animazioni,
+  ombre, dissolvenze, scorrimento fluido, trascinamento, trasparenze, Peek) lasciando attivi "Smussa gli angoli dei
+  caratteri" e "Mostra anteprime anziche' icone". Effetto immediato; Annulla rimette ogni casella com'era.
+- Nuova ottimizzazione: spegnimento piu' rapido (WaitToKillServiceTimeout = 2000).
+
 ## LagDoctor 5.11.1
 
 - Spegnendo la game mode il messaggio dice cosa e' stato annullato davvero: "Game mode spenta" se non c'era niente

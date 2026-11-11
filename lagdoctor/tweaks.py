@@ -635,6 +635,110 @@ MEM_KEY = MEM
 SUB_PCIE = "501a4d13-42af-4429-9fd1-a8218c268e20"
 
 
+class VisualFxTweak(Tweak):
+    """Effetti visivi come in 'Impostazioni di sistema avanzate > Prestazioni > Effetti visivi': tutte le caselle
+    spente tranne 'Smussa gli angoli dei caratteri' e 'Mostra anteprime anziche' icone'.
+
+    Le caselle sono salvate quasi tutte in UserPreferencesMask: le cambio con SystemParametersInfo (come fa la
+    finestra di Windows), cosi' l'effetto e' immediato e il valore viene salvato. Il resto e' nel registro.
+    Annulla rimette ogni casella com'era (e anche il valore UserPreferencesMask originale)."""
+    # (nome, SPI_GET, SPI_SET, modo): "pv" = valore in pvParam, "ui" = valore in uiParam
+    SPI = [("animazioni dentro le finestre", 0x1042, 0x1043, "pv"),
+           ("dissolvenza/scorrimento dei menu", 0x1002, 0x1003, "pv"),
+           ("dissolvenza dei menu", 0x1012, 0x1013, "pv"),
+           ("dissolvenza delle voci dopo il clic", 0x1014, 0x1015, "pv"),
+           ("descrizioni comandi animate", 0x1016, 0x1017, "pv"),
+           ("dissolvenza delle descrizioni", 0x1018, 0x1019, "pv"),
+           ("caselle combinate a scorrimento", 0x1004, 0x1005, "pv"),
+           ("scorrimento fluido degli elenchi", 0x1006, 0x1007, "pv"),
+           ("ombra sotto il puntatore", 0x101A, 0x101B, "pv"),
+           ("ombre sotto le finestre", 0x1024, 0x1025, "pv"),
+           ("contenuto della finestra durante il trascinamento", 0x0026, 0x0025, "ui")]
+    ADV = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+    REG = [("HKCU", ADV, "ListviewAlphaSelect", DWORD, 0),          # rettangolo di selezione trasparente
+           ("HKCU", ADV, "ListviewShadow", DWORD, 0),               # ombre sotto le etichette del desktop
+           ("HKCU", ADV, "TaskbarAnimations", DWORD, 0),            # animazioni della barra
+           ("HKCU", ADV, "IconsOnly", DWORD, 0),                    # anteprime: RESTANO attive
+           ("HKCU", r"Software\Microsoft\Windows\DWM", "EnableAeroPeek", DWORD, 0),
+           ("HKCU", r"Software\Microsoft\Windows\DWM", "AlwaysHibernateThumbnails", DWORD, 0),
+           ("HKCU", r"Control Panel\Desktop\WindowMetrics", "MinAnimate", SZ, "0"),
+           ("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", DWORD, 3)]
+
+    def _u32(self):
+        import ctypes
+        u = ctypes.windll.user32
+        u.SystemParametersInfoW.argtypes = [ctypes.c_uint, ctypes.c_uint, ctypes.c_void_p, ctypes.c_uint]
+        return ctypes, u
+
+    def _get(self, get_id):
+        ctypes, u = self._u32()
+        v = ctypes.c_int(0)
+        if not u.SystemParametersInfoW(get_id, 0, ctypes.byref(v), 0):
+            return None
+        return bool(v.value)
+
+    def _set(self, set_id, mode, value):
+        ctypes, u = self._u32()
+        flags = 0x01 | 0x02  # SPIF_UPDATEINIFILE | SPIF_SENDCHANGE: salva e applica subito
+        if mode == "ui":
+            return bool(u.SystemParametersInfoW(set_id, int(value), None, flags))
+        return bool(u.SystemParametersInfoW(set_id, 0, ctypes.c_void_p(1 if value else 0), flags))
+
+    def _min_animate(self, value=None):
+        ctypes, u = self._u32()
+
+        class AI(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("iMinAnimate", ctypes.c_int)]
+        a = AI(ctypes.sizeof(AI), 0)
+        if value is None:
+            return bool(a.iMinAnimate) if u.SystemParametersInfoW(0x0048, a.cbSize, ctypes.byref(a), 0) else None
+        a.iMinAnimate = 1 if value else 0
+        return bool(u.SystemParametersInfoW(0x0049, a.cbSize, ctypes.byref(a), 0x03))
+
+    def status(self):
+        try:
+            states = [self._get(g) for _n, g, _s, _m in self.SPI] + [self._min_animate()]
+        except Exception:
+            return None
+        if any(x is None for x in states):
+            return None
+        reg_ok = all(reg_read(h, p, n)[0] == v for h, p, n, _t, v in self.REG if n not in ("VisualFXSetting",))
+        return not any(states) and reg_ok
+
+    def apply(self):
+        upm, _t = reg_read("HKCU", r"Control Panel\Desktop", "UserPreferencesMask")
+        backup = {"spi": {}, "min": self._min_animate(), "reg": [], "upm": upm.hex() if isinstance(upm, bytes) else None}
+        for _n, g, s, m in self.SPI:
+            backup["spi"][str(s)] = [self._get(g), m]
+        for h, p, n, t, v in self.REG:
+            prev, ptype = reg_read(h, p, n)
+            backup["reg"].append([h, p, n, ptype, prev])
+        failed = [n for n, _g, s, m in self.SPI if not self._set(s, m, False)]
+        self._min_animate(False)
+        for h, p, n, t, v in self.REG:
+            reg_write(h, p, n, t, v)
+        if failed:
+            raise RuntimeError("Windows non ha accettato: " + ", ".join(failed))
+        return backup
+
+    def revert(self, backup):
+        if "spi" not in backup:  # voce applicata con una versione precedente (solo registro)
+            RegTweak.revert(self, backup)
+            return
+        for s, (prev, m) in backup.get("spi", {}).items():
+            if prev is not None:
+                self._set(int(s), m, prev)
+        if backup.get("min") is not None:
+            self._min_animate(backup["min"])
+        for h, p, n, ptype, prev in backup.get("reg", []):
+            if prev is None:
+                reg_delete(h, p, n)
+            else:
+                reg_write(h, p, n, ptype, prev)
+        if backup.get("upm"):
+            reg_write("HKCU", r"Control Panel\Desktop", "UserPreferencesMask", 3, bytes.fromhex(backup["upm"]))
+
+
 def installed_ram_kb():
     """RAM INSTALLATA in KB (es. 32 GB = 33554432 = 0x2000000), non quella utilizzabile (un po' meno)."""
     try:
@@ -797,16 +901,13 @@ FAMOUS = [
              source="WinUtil"),
 
     # ---------------------------------------------------- interfaccia, input, sfondo
-    RegTweak("visual_fx", "Interfaccia e input", "Effetti visivi: prestazioni migliori",
-             "Toglie animazioni, ombre e trascinamento con contenuto della finestra. Windows sembra piu' "
-             "rapido; nessun effetto dentro i giochi.", "bassa",
-             values=[("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects",
-                      "VisualFXSetting", DWORD, 2),
-                     ("HKCU", r"Control Panel\Desktop\WindowMetrics", "MinAnimate", SZ, "0"),
-                     ("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
-                      "TaskbarAnimations", DWORD, 0),
-                     ("HKCU", r"Software\Microsoft\Windows\DWM", "EnableAeroPeek", DWORD, 0)],
-             source="WinUtil"),
+    VisualFxTweak("visual_fx", "Interfaccia e input",
+                  "Effetti visivi: prestazioni migliori (testo smussato e anteprime restano)",
+                  "Come 'Impostazioni di sistema avanzate > Prestazioni > Effetti visivi': spegne animazioni, "
+                  "ombre, dissolvenze, scorrimento fluido, trasparenze e Peek, tenendo attivi 'Smussa gli angoli dei "
+                  "caratteri' e 'Mostra anteprime anziche' icone'. Effetto immediato (barra delle applicazioni e "
+                  "desktop al prossimo accesso).", "bassa",
+                  source="Microsoft (Opzioni prestazioni); XDA Developers; WinUtil"),
     RegTweak("menu_delay", "Interfaccia e input", "MenuShowDelay = 0",
              "I menu di Windows si aprono subito. Puramente estetico, nessun effetto sui giochi.", "comfort",
              values=[("HKCU", r"Control Panel\Desktop", "MenuShowDelay", SZ, "0")]),
@@ -818,6 +919,11 @@ FAMOUS = [
              "Ritardo minimo e velocita' massima di ripetizione dei tasti tenuti premuti.", "comfort",
              values=[("HKCU", r"Control Panel\Keyboard", "KeyboardDelay", SZ, "0"),
                      ("HKCU", r"Control Panel\Keyboard", "KeyboardSpeed", SZ, "31")]),
+    RegTweak("wait_kill_svc", "Interfaccia e input", "Spegnimento piu' rapido (WaitToKillServiceTimeout = 2000)",
+             "Allo spegnimento Windows aspetta al massimo 2 secondi (invece di 5) che i servizi si chiudano da soli "
+             "prima di chiuderli lui.", "comfort", risk=1, reboot=True,
+             values=[("HKLM", r"SYSTEM\CurrentControlSet\Control", "WaitToKillServiceTimeout", SZ, "2000")],
+             recommend=lambda s: None, source="XDA Developers; documentazione Microsoft"),
     RegTweak("startup_delay", "Interfaccia e input", "Elimina il ritardo dei programmi all'avvio",
              "Windows avvia subito i programmi di avvio invece di aspettare qualche secondo.", "comfort",
              values=[("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize",

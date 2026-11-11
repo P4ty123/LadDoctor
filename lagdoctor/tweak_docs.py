@@ -318,9 +318,20 @@ doc("diagtrack",
     "Meno attivita' in background e traffico di rete.",
     "Nessuno per l'uso normale. Alcune diagnostiche di Windows Update potrebbero essere meno dettagliate.")
 doc("visual_fx",
-    "Animazioni, ombre e anteprime di Windows.",
-    "Windows sembra piu' reattivo sul desktop.",
-    "Solo estetica; nessun effetto dentro i giochi.")
+    "Gli effetti visivi di Windows (Sistema > Impostazioni di sistema avanzate > Prestazioni > Effetti visivi): "
+    "animazioni di finestre, menu e barra, dissolvenze, ombre, scorrimento fluido, contenuto delle finestre durante "
+    "il trascinamento, rettangolo di selezione trasparente, Peek. Restano attivi 'Smussa gli angoli dei caratteri' "
+    "(senza, il testo e' seghettato) e 'Mostra anteprime anziche' icone'.",
+    "Finestre e menu si aprono all'istante e il compositore di Windows lavora meno: sui PC deboli o con poca "
+    "memoria video Windows e' piu' scattante. Dentro i giochi a schermo intero non cambia niente.",
+    "Windows ha un aspetto piu' 'spartano' (niente ombre e animazioni). Annulla rimette ogni casella esattamente "
+    "com'era.")
+doc("wait_kill_svc",
+    "WaitToKillServiceTimeout e' quanto Windows aspetta, allo spegnimento, che i servizi si chiudano da soli "
+    "(predefinito 5000 ms, 5 secondi).",
+    "Con 2000 ms lo spegnimento e il riavvio sono piu' rapidi quando un servizio e' lento a chiudersi.",
+    "Un servizio che stava salvando dati potrebbe essere chiuso prima di finire (raro: i servizi di Windows si "
+    "chiudono in meno di 2 secondi). Nessun effetto sui giochi.")
 doc("menu_delay",
     "Il ritardo prima che si aprano i sottomenu di Windows (400 ms).",
     "Menu istantanei.",

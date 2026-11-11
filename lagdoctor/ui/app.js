@@ -167,7 +167,7 @@ async function home() {
         <div class="row" style="margin-top:12px"><button class="ghost sm" data-go="scan">Scansione completa</button><button class="ghost sm" data-go="record">Analizza un gioco</button></div></div>
       <div class="card quick"><h4>Controllo rapido</h4>${S.booting ? '<div class="mut" style="padding:8px 0">Sto leggendo le impostazioni del sistema...</div>' : quickHtml(probs)}</div>
     </div>`;
-  $$("[data-go]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.go === "tweaks") S.filter = "fix"; if (b.dataset.go === "record") S.recTab = "rec"; go(b.dataset.go); }));
+  $$("[data-go]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.go === "tweaks") { S.filter = "fix"; S.twCat = ""; } if (b.dataset.go === "record") S.recTab = "rec"; go(b.dataset.go); }));
   bindFixButtons(main());
   const hv = $("#home-gm-ver"); if (hv) { S.gmGames = ((S.state.gm || {}).games || []).join(", "); hv.onclick = gmVerifyDialog; }
   startSensors($("#home-sensors"));
@@ -246,8 +246,8 @@ function scan() {
       <div class="card"><b style="font-size:24px">${s.startup}</b><p class="mut">programmi che partono con Windows</p><button class="ghost" data-go2="startup">Gestisci</button></div>
     </div>
     <h2>Problemi trovati (${r.problems.length})</h2>${probHtml(r.problems)}`;
-  $("#to-fix").onclick = () => { S.filter = "fix"; go("tweaks"); };
-  $("#to-avail").onclick = () => { S.filter = "off"; go("tweaks"); };
+  $("#to-fix").onclick = () => { S.filter = "fix"; S.twCat = ""; go("tweaks"); };
+  $("#to-avail").onclick = () => { S.filter = "off"; S.twCat = ""; go("tweaks"); };
   $$("[data-go2]").forEach((b) => (b.onclick = () => go(b.dataset.go2)));
   bindFixButtons($("#scan-out"));
 }
@@ -295,51 +295,46 @@ async function tweaksPage() {
     await runJob(api("/api/check", {})).catch(() => {});
     await loadCatalog(true);
   }
+  if (S.catFilter) { S.twCat = S.catFilter; S.catFilter = null; }
+  if (S.twCat === undefined) S.twCat = "";
   main().innerHTML = `
-    <h1>Ottimizzazioni e correzioni</h1>
-    <p class="sub">${tws().length} voci. Spunta quelle che vuoi e premi Applica: prima di ogni modifica viene creato un punto di ripristino. Le voci gia' attive non si possono riattivare: se le ha applicate LagDoctor trovi il pulsante Annulla.</p>
-    <div class="row" style="margin-bottom:10px">
-      <div class="chips" id="filters">
-        <span class="chip" data-f="fix">Da correggere (${toFix().length})</span>
-        <span class="chip" data-f="off">Non attive (${notActive().length})</span>
-        <span class="chip" data-f="rec">Consigliate</span>
-        <span class="chip" data-f="on">Attive</span>
-        <span class="chip" data-f="myth">Non affidabili</span>
-        <span class="chip" data-f="all">Tutte</span>
-        <span class="chip" data-f="ign">Ignorate (${ignoredList().length})</span>
-      </div>
-      <span class="grow"></span>
-      <input type="search" id="q" placeholder="Cerca..." style="width:200px">
-    </div>
-    <div class="row" style="margin-bottom:6px">
-      <select id="f-cat"><option value="">Tutte le categorie</option>${[...new Set(tws().map((t) => t.cat))].map((c) => `<option>${esc(c)}</option>`).join("")}</select>
-      <select id="f-risk"><option value="">Qualsiasi rischio</option><option value="0">Solo sicure</option><option value="1">Fino a moderate</option><option value="3">Tutte (anche pericolose)</option></select>
-      <select id="f-eff"><option value="">Qualsiasi efficacia</option><option value="alta,media">Alta e media</option><option value="bassa">Bassa</option><option value="comfort">Comodita'</option><option value="dubbia">Dubbia</option></select>
-      <span class="grow"></span>
-      <button class="ghost sm" id="sel-rec">Seleziona consigliate</button>
-      <button class="ghost sm" id="sel-safe">Seleziona sicure</button>
-      <button class="ghost sm" id="sel-none">Deseleziona</button>
-      <button class="ghost sm" id="recheck">Ricontrolla stato</button>
-    </div>
-    <div id="tw-list"></div>
-    <details><summary>Da fare a mano: impostazioni utili che nessun programma puo' cambiare dall'esterno (${S.catalog.manual.length})</summary>
-      ${S.catalog.manual.map((m) => `<div class="card" style="margin-bottom:6px"><b>${esc(m.name)}</b><p style="margin:4px 0">${esc(m.how)}</p><span class="mut" style="font-size:12px">Fonte: ${esc(m.source)}</span></div>`).join("")}
-    </details>
+    <div class="row opt-head"><div><h1 style="margin-bottom:4px">Ottimizzazioni</h1><p class="sub" id="opt-sub" style="margin:0"></p></div><span class="grow"></span>
+      <div class="seg" id="filters">
+        <a data-f="fix">Da correggere</a><a data-f="all">Tutte</a><a data-f="rec">Consigliate</a><a data-f="off">Non attive</a><a data-f="on">Attive</a><a data-f="ign">Ignorate</a>
+      </div></div>
+    <div class="opt-wrap"><div class="cats" id="cats"></div>
+      <div class="panel">
+        <div class="row" style="align-items:flex-start"><div><h2 id="pan-t"></h2><div class="mut" id="pan-s" style="font-size:13px"></div></div><span class="grow"></span>
+          <input type="search" id="q" placeholder="Cerca..." style="width:190px"></div>
+        <div class="row opt-tools">
+          <button class="ghost sm" id="sel-rec">Seleziona consigliate</button>
+          <button class="ghost sm" id="sel-none">Deseleziona</button>
+          <span class="grow"></span>
+          <button class="ghost sm" id="recheck">Ricontrolla stato</button>
+        </div>
+        <div id="tw-list"></div>
+        <details style="margin-top:18px"><summary>Da fare a mano: impostazioni utili che nessun programma puo' cambiare dall'esterno (${S.catalog.manual.length})</summary>
+          ${S.catalog.manual.map((m) => `<div class="card" style="margin-bottom:6px"><b>${esc(m.name)}</b><p style="margin:4px 0">${esc(m.how)}</p><span class="mut" style="font-size:12px">Fonte: ${esc(m.source)}</span></div>`).join("")}
+        </details>
+      </div></div>
     <div class="bar"><span id="sel-count" class="grow mut">Nessuna voce selezionata</span>
       <button class="ghost" id="undo-btn">Annulla modifiche...</button><button id="apply-btn" disabled>Applica</button></div>`;
-  if (S.catFilter) { $("#f-cat").value = S.catFilter; S.catFilter = null; }
-  $$("#filters .chip").forEach((c) => c.addEventListener("click", () => { S.filter = c.dataset.f; renderTweaks(); }));
-  ["#q", "#f-cat", "#f-risk", "#f-eff"].forEach((s) => $(s).addEventListener("input", renderTweaks));
+  $$("#filters a").forEach((c) => c.addEventListener("click", () => {
+    S.filter = c.dataset.f;
+    if (S.twCat && !filtered().some((t) => t.cat === S.twCat)) S.twCat = "";  /* categoria vuota con questo filtro: mostro tutto */
+    renderTweaks();
+  }));
+  $("#q").addEventListener("input", renderTweaks);
   $("#sel-rec").onclick = () => { visible().forEach((t) => { if (t.kind !== "myth" && (t.recommended || t.kind === "fix" || t.harm_if_off) && selectable(t)) S.sel.add(t.id); }); renderTweaks(); };
-  $("#sel-safe").onclick = () => { visible().forEach((t) => { if (t.kind !== "myth" && t.risk === 0 && selectable(t)) S.sel.add(t.id); }); renderTweaks(); };
   $("#sel-none").onclick = () => { S.sel.clear(); renderTweaks(); };
   $("#recheck").onclick = async () => { $("#recheck").disabled = true; toast("Ricontrollo lo stato di tutte le impostazioni..."); await runJob(api("/api/check", {})).catch((e) => toast(e.message)); await loadCatalog(true); tweaksPage(); };
   $("#apply-btn").onclick = applySelected;
   $("#undo-btn").onclick = undoDialog;
   renderTweaks();
 }
-function visible() {
-  const q = ($("#q")?.value || "").toLowerCase(), cat = $("#f-cat")?.value, risk = $("#f-risk")?.value, eff = $("#f-eff")?.value;
+/* voci che passano il filtro in alto e la ricerca (senza guardare la categoria) */
+function filtered() {
+  const q = ($("#q")?.value || "").toLowerCase();
   const fx = new Set(toFix().map((t) => t.id)), na = new Set(notActive().map((t) => t.id));
   return tws().filter((t) => {
     if (S.filter === "ign") { if (!t.ignored) return false; }
@@ -349,12 +344,12 @@ function visible() {
     if (S.filter === "rec" && !(t.recommended && !isOn(t)) && !fx.has(t.id)) return false;
     if (S.filter === "on" && !(isOn(t) && t.kind !== "myth")) return false;
     if (S.filter === "myth" && t.kind !== "myth") return false;
-    if (cat && t.cat !== cat) return false;
-    if (risk !== "" && risk !== undefined && t.risk > Number(risk)) return false;
-    if (eff && !eff.split(",").includes(t.efficacy)) return false;
     if (q && !(t.name + " " + t.desc).toLowerCase().includes(q)) return false;
     return true;
   });
+}
+function visible() {
+  return filtered().filter((t) => !S.twCat || t.cat === S.twCat);
 }
 function docHtml(t) {
   const d = t.doc || { cosa: t.desc, perche: "", problemi: "" };
@@ -369,10 +364,7 @@ function docHtml(t) {
 }
 function actionHtml(t) {
   if (t.ignored) return `<button class="ghost sm" data-unign="${t.id}" title="Torna tra ${t.recommended === true ? "le consigliate" : "le altre voci"}">Non ignorare</button>`;
-  const ign = !t.applied && (!isOn(t) || t.kind === "myth") ? `<button class="ghost sm ign-btn" data-ign="${t.id}" title="Non mostrarla piu' tra quelle da fare: non conta nel punteggio">Ignora</button>` : "";
-  if (t.applied) return `<button class="ghost sm" data-undo="${t.id}">${t.kind === "myth" ? "Disattiva" : "Annulla"}</button>`;
-  if (t.kind === "myth" && t.status === true) return `<button class="sm red" data-off="${t.id}">Disattiva</button>` + ign;
-  return ign;
+  return !t.applied && (!isOn(t) || t.kind === "myth") ? `<button class="ghost sm ign-btn" data-ign="${t.id}" title="Non mostrarla piu' tra quelle da fare: non conta nel punteggio">Ignora</button>` : "";
 }
 async function setIgnored(id, ignore) {
   const t = tws().find((x) => x.id === id);
@@ -382,48 +374,110 @@ async function setIgnored(id, ignore) {
     S.sel.delete(id);
     toast(ignore ? "Ignorata: la trovi in \"Ignorate\"" : (t && t.recommended === true ? "Rimessa tra le consigliate" : "Rimessa tra le voci normali"));
     const n = toFix().length; $("#nav-fix").hidden = !n; $("#nav-fix").textContent = n;
-    const chips = $("#filters");
-    if (chips) { $('.chip[data-f="fix"]', chips).textContent = `Da correggere (${toFix().length})`; $('.chip[data-f="off"]', chips).textContent = `Non attive (${notActive().length})`; $('.chip[data-f="ign"]', chips).textContent = `Ignorate (${ignoredList().length})`; }
     refreshState().catch(() => {});
     renderTweaks();
   } catch (e) { toast("Errore: " + e.message); }
 }
+/* pallini dell'effetto e rischio colorato */
+const EFF_DOTS = { alta: 3, media: 2, bassa: 1, comfort: 1, dubbia: 0, sconsigliata: 0 };
+const EFF_WORD = { alta: "effetto alto", media: "effetto medio", bassa: "effetto basso", comfort: "comodita'", dubbia: "effetto dubbio", sconsigliata: "sconsigliata" };
+const RISK_CLS = ["s", "m", "r", "p"];
+function dotsHtml(t) {
+  const n = EFF_DOTS[t.efficacy] ?? 0;
+  const lab = t.efficacy === "dubbia" ? "dubbio" : t.efficacy === "sconsigliata" ? "sconsigl." : t.efficacy === "comfort" ? "comodita'" : "effetto";
+  return `<span class="dots" title="${EFF_WORD[t.efficacy] || esc(t.efficacy)}">${[0, 1, 2].map((k) => `<i${k < n ? ' class="f"' : ""}></i>`).join("")}<em>${lab}</em></span>`;
+}
+function stateHtml(t) {
+  if (S.sel.has(t.id)) return '<span class="badge b-acc">da applicare</span>';
+  if (t.applied || t.kind === "myth" || t.status === true) return statusBadge(t);
+  if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
+  if (t.status === false && (t.kind === "fix" || t.harm_if_off) && !t.ignored) return '<span class="badge b-bad">da correggere</span>';
+  if (t.recommended === true && !t.ignored) return '<span class="badge b-acc">consigliata</span>';
+  if (t.status == null) return statusBadge(t);
+  return "";
+}
+function switchHtml(t) {
+  const on = isOn(t) || S.sel.has(t.id);
+  let tip = "", dis = false;
+  if (t.ignored) { dis = true; tip = "Voce ignorata"; }
+  else if (t.applied) tip = t.kind === "myth" ? "Disattiva" : "Annulla la modifica di LagDoctor";
+  else if (t.kind === "myth" && t.status === true) tip = "Disattiva";
+  else if (isOn(t)) { dis = true; tip = "Gia' attiva (impostata da Windows o da un altro programma)"; }
+  else tip = S.sel.has(t.id) ? "Selezionata: premi Applica in basso" : "Seleziona per applicarla";
+  return `<label class="switch${S.sel.has(t.id) ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
+}
+function rowHtml(t) {
+  return `<div class="tw2 ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
+    <div class="tx name"><b>${esc(t.name)}</b><div>${esc(t.desc || (t.doc && t.doc.cosa) || "")} <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span></div></div>
+    <div class="right">${actionHtml(t)}<span class="stc">${stateHtml(t)}</span>${dotsHtml(t)}<span class="risk ${RISK_CLS[t.risk] || "m"}">${esc(t.risk_label)}</span>${switchHtml(t)}</div>
+    ${S.open.has(t.id) ? docHtml(t) : ""}
+  </div>`;
+}
 function renderTweaks() {
-  $$("#filters .chip").forEach((c) => c.classList.toggle("on", c.dataset.f === S.filter));
+  $$("#filters a").forEach((c) => c.classList.toggle("on", c.dataset.f === S.filter));
   [...S.sel].forEach((id) => { const t = tws().find((x) => x.id === id); if (!t || !selectable(t)) S.sel.delete(id); });
+  const all = tws(), act = twsActive(), fx = new Set(toFix().map((t) => t.id)), fl = filtered();
+  const order = [...new Set(all.map((t) => t.cat))];
+  if (S.twCat && !order.includes(S.twCat)) S.twCat = "";
+  const nOn = act.filter((t) => isOn(t) && t.kind !== "myth").length, nTot = act.filter((t) => t.kind !== "myth" || isOn(t)).length;
+  $("#opt-sub").textContent = `${nOn} attive su ${nTot}` + (fx.size ? ` · ${fx.size} da correggere` : "");
+  const counts = { fix: fx.size, ign: ignoredList().length };
+  $$("#filters a").forEach((c) => { const n = counts[c.dataset.f]; c.innerHTML = c.textContent.replace(/ \d+$/, "") + (n ? ` <small>${n}</small>` : ""); });
+  /* categorie a sinistra */
+  const catRow = (key, label, items) => {
+    const tot = items.filter((t) => t.kind !== "myth" || isOn(t)).length || items.length;
+    const on = items.filter((t) => isOn(t) && t.kind !== "myth").length;
+    const myth = items.length && items.every((t) => t.kind === "myth");
+    const warn = items.some((t) => fx.has(t.id));
+    const n = key ? fl.filter((t) => t.cat === key).length : fl.length;
+    const cnt = myth ? `${items.filter((t) => isOn(t)).length} attive` : `${on}/${tot}`;
+    const pct = myth ? 0 : Math.round(100 * on / Math.max(tot, 1));
+    return `<div class="cat ${S.twCat === key ? "on" : ""} ${n ? "" : "empty"}" data-cat="${esc(key)}"><div class="r">${warn ? '<span class="warn" title="ci sono voci da correggere"></span>' : ""}<b>${esc(label)}</b><span class="c">${cnt}</span></div>
+      <div class="p"><i style="width:${pct}%"></i></div></div>`;
+  };
+  $("#cats").innerHTML = catRow("", "Tutte le categorie", act) + order.map((c) => catRow(c, c === MYTH_CAT ? "Non affidabili" : c, act.filter((t) => t.cat === c))).join("");
+  $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { S.twCat = el.dataset.cat; renderTweaks(); }));
+  /* pannello a destra */
   const list = visible();
+  const fname = { fix: "da correggere", all: "", rec: "consigliate", off: "non attive", on: "attive", ign: "ignorate", myth: "non affidabili" }[S.filter] || "";
+  $("#pan-t").textContent = S.twCat ? (S.twCat === MYTH_CAT ? "Non affidabili" : S.twCat) : "Tutte le categorie";
+  const scope = act.filter((t) => !S.twCat || t.cat === S.twCat);
+  const sTot = scope.filter((t) => t.kind !== "myth" || isOn(t)).length;
+  const allMyth = scope.length && scope.every((t) => t.kind === "myth");
+  $("#pan-s").textContent = (allMyth ? `${scope.length} voci · ${scope.filter(isOn).length} attive sul tuo PC` : `${scope.filter((t) => isOn(t) && t.kind !== "myth").length} attive su ${sTot}`) + (fname ? ` · ${list.length} ${fname}` : "") +
+    (S.twCat === "Sicurezza" ? " · voci pericolose: chiedono una conferma prima di essere applicate" : "");
   const groups = {};
   list.slice().sort((a, b) => (b.recommended === true) - (a.recommended === true) || (EFF[a.efficacy] - EFF[b.efficacy]) || a.risk - b.risk)
     .forEach((t) => (groups[t.cat] = groups[t.cat] || []).push(t));
-  const order = [...new Set(tws().map((t) => t.cat))];
   const ignNote = S.filter === "ign" ? `<div class="myth-note" style="background:rgba(255,255,255,.04);border-color:var(--line2)">Voci che hai deciso di ignorare: non compaiono tra quelle da correggere o consigliate e <b>non contano nel punteggio</b> del PC. Con <b>Non ignorare</b> tornano al loro posto.</div>` : "";
+  const mythNote = `<div class="myth-note">Tweak famosi che <b>non funzionano o peggiorano</b> le prestazioni sui PC moderni. Puoi comunque attivarli per provarli (apri i dettagli per sapere cosa fanno, quando potrebbero aiutare e perche' e' meglio lasciarli disattivati). Se uno risulta ATTIVO sul tuo PC, LagDoctor ti propone di disattivarlo.</div>`;
+  const myths = () => S.catalog.myths.map((m) => `<div class="tw2"><div class="tx"><b>${esc(m.name)}</b><div>${esc(m.why)}</div></div><div class="right"><span class="badge">non attivabile</span></div></div>`).join("");
+  const multi = !S.twCat;
   $("#tw-list").innerHTML = ignNote + (list.length ? order.filter((c) => groups[c]).map((c) => `
-    <div class="tw-group"><h3>${esc(c)}</h3>
-    ${c === MYTH_CAT ? `<div class="myth-note">Tweak famosi che <b>non funzionano o peggiorano</b> le prestazioni sui PC moderni. Puoi comunque attivarli per provarli (apri i dettagli per sapere cosa fanno, quando potrebbero aiutare e perche' e' meglio lasciarli disattivati). Se uno risulta ATTIVO sul tuo PC, LagDoctor ti propone di disattivarlo.</div>` : ""}
-    ${groups[c].map((t) => `
-      <div class="tw ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
-        ${selectable(t) ? `<input type="checkbox" ${S.sel.has(t.id) ? "checked" : ""}>` : t.ignored ? `<span class="mut" title="ignorata">–</span>` : `<span class="mut" title="gia' attiva">✓</span>`}
-        <div class="name"><b>${esc(t.name)}</b> ${t.recommended === true && !isOn(t) ? '<span class="badge b-acc">consigliata</span>' : ""}
-          <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span>
-          ${t.doc && !S.open.has(t.id) ? `<div class="short">${esc(t.doc.cosa)}</div>` : ""}</div>
-        <div class="meta">${statusBadge(t)}<span class="badge ${riskCls[t.risk]}">${t.risk_label}</span>
-          <span class="badge ${effCls[t.efficacy] || ""}">eff. ${t.efficacy}</span>${t.reboot ? '<span class="badge">riavvio</span>' : ""}
-          ${actionHtml(t)}</div>
-        ${S.open.has(t.id) ? docHtml(t) : ""}
-      </div>`).join("")}
-    ${c === MYTH_CAT ? S.catalog.myths.map((m) => `<div class="tw"><span class="mut">–</span><div><b>${esc(m.name)}</b><div class="short" style="white-space:normal">${esc(m.why)}</div></div><div class="meta"><span class="badge">non attivabile</span></div></div>`).join("") : ""}
-    </div>`).join("") : `<div class="empty">${S.filter === "ign" ? "Nessuna voce ignorata." : "Nessuna voce con questi filtri."}</div>`);
-  $$("#tw-list .tw[data-id]").forEach((row) => {
-    const id = row.dataset.id, cb = $("input", row);
-    if (cb) cb.addEventListener("change", (e) => { e.target.checked ? S.sel.add(id) : S.sel.delete(id); renderTweaks(); });
+    <div class="tw-group">${multi ? `<h3>${esc(c === MYTH_CAT ? "Non affidabili" : c)}</h3>` : ""}
+    ${c === MYTH_CAT ? mythNote : ""}
+    ${groups[c].map(rowHtml).join("")}
+    ${c === MYTH_CAT && S.filter === "all" ? myths() : ""}
+    </div>`).join("") : `<div class="empty">${S.filter === "ign" ? "Nessuna voce ignorata." : S.filter === "fix" ? "Niente da correggere qui." : "Nessuna voce con questi filtri."}</div>`);
+  $$("#tw-list .tw2[data-id]").forEach((row) => {
+    const id = row.dataset.id;
     $(".name", row).addEventListener("click", () => { S.open.has(id) ? S.open.delete(id) : S.open.add(id); renderTweaks(); });
   });
-  $$("[data-undo]").forEach((b) => b.addEventListener("click", () => revertIds([b.dataset.undo])));
-  $$("[data-off]").forEach((b) => b.addEventListener("click", () => forceOff(b.dataset.off)));
+  $$("[data-sw]").forEach((cb) => cb.addEventListener("change", (e) => {
+    const id = cb.dataset.sw, t = tws().find((x) => x.id === id);
+    if (!t) return;
+    if (t.applied) { e.target.checked = true; return revertIds([id]); }
+    if (t.kind === "myth" && t.status === true) { e.target.checked = true; return forceOff(id); }
+    if (!selectable(t)) { e.target.checked = isOn(t); return; }
+    e.target.checked ? S.sel.add(id) : S.sel.delete(id);
+    renderTweaks();
+  }));
+  $$("[data-undo]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); revertIds([b.dataset.undo]); }));
+  $$("[data-off]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); forceOff(b.dataset.off); }));
   $$("[data-ign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.ign, true); }));
   $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
   const n = S.sel.size;
-  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + " (clicca sul nome di una voce per leggere cosa fa)" : "Nessuna voce selezionata. Clicca sul nome di una voce per leggere cosa fa.";
+  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : "Accendi l'interruttore delle voci che vuoi e premi Applica. Clicca sul nome di una voce per leggere cosa fa.";
   $("#apply-btn").disabled = !n;
 }
 async function forceOff(id) {

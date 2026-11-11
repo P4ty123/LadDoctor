@@ -1,3 +1,12 @@
+## LagDoctor 5.15.0
+
+- Nuova pagina Ottimizzazioni: categorie a sinistra (con quante voci sono attive e un pallino rosso se c'e' qualcosa
+  da correggere) e voci a destra.
+- Accanto a ogni voce: i pallini dell'effetto (piu' pallini = piu' effetto) e il rischio colorato
+  (Sicura verde, Moderata gialla, Rischiosa arancione, Pericolosa rossa), poi l'interruttore.
+- Si accende l'interruttore delle voci che si vogliono e si preme Applica. Sulle voci applicate da LagDoctor
+  l'interruttore annulla la modifica. Il pulsante Ignora compare passando col mouse sulla voce.
+
 ## LagDoctor 5.14.0
 
 - Ottimizzazioni: pulsante "Ignora" su ogni voce e nuova sezione "Ignorate". Le voci ignorate non compaiono tra

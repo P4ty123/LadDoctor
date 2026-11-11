@@ -1,3 +1,8 @@
+## LagDoctor 5.13.4
+
+- Il progetto su GitHub ora si chiama LagDoctor (prima LadDoctor): aggiornamenti e collegamenti usano il nome nuovo.
+  Le versioni precedenti continuano a trovare gli aggiornamenti grazie al reindirizzamento di GitHub.
+
 ## LagDoctor 5.13.3
 
 - Stato reale anche per SystemResponsiveness (10 o meno), nomi 8.3 (1 o 3), WaitToKillServiceTimeout (2000 o meno),

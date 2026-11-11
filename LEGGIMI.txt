@@ -47,7 +47,7 @@ GAME MODE (pagina "Game mode")
   Diario delle attivita': gamemode.log
 
 VERSIONE INSTALLABILE
-  Scarica LagDoctor-Setup.exe da https://github.com/P4ty123/LadDoctor/releases/latest
+  Scarica LagDoctor-Setup.exe da https://github.com/P4ty123/LagDoctor/releases/latest
   Si aggiorna da solo (pulsante "Aggiornamenti"). I dati sono in C:\ProgramData\LagDoctor:
   restano dopo aggiornamenti e reinstallazioni. AVVIA.bat continua a funzionare e usa gli stessi dati.
   Impostazioni: avvio con Windows, anche ridotto a icona.

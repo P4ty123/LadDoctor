@@ -1,3 +1,14 @@
+## LagDoctor 5.13.2
+
+- Le ottimizzazioni gia' attive grazie ad altri programmi (es. EXM) o impostate a mano ora vengono riconosciute:
+  - Timer Resolution: conta il timer reale di Windows (~0,5 ms), chiunque lo tenga;
+  - Effetti visivi: contano le caselle realmente spente, non chi le ha spente;
+  - Esclusione di Defender: controlla se una cartella di giochi e' gia' esclusa;
+  - accelerazione del mouse, scorciatoie di accessibilita', "ultimo accesso" NTFS, Game DVR, Modalita' Gioco,
+    widget, Copilot, ricerca Bing, Ottimizzazione recapito, telemetria, ritardo dei menu, IPv4: contano anche i
+    valori equivalenti impostati dalle Impostazioni di Windows o da altri programmi.
+  Queste voci non compaiono piu' tra quelle da applicare se sono gia' attive.
+
 ## LagDoctor 5.13.0
 
 - Nuove voci consigliate (applicabili tutte insieme con "Seleziona consigliate"): telemetria e pubblicita' al

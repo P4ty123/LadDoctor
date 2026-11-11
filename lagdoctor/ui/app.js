@@ -274,7 +274,7 @@ function statusBadge(t) {
   if (t.applied) return t.kind === "myth" ? '<span class="badge b-bad">attivata da LagDoctor</span>' : '<span class="badge b-acc">applicata da LagDoctor</span>';
   if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
   if (t.kind === "myth") return t.status === true ? '<span class="badge b-bad">ATTIVA: da disattivare</span>' : t.status === false ? '<span class="badge b-ok">disattivata</span>' : '<span class="badge">non verificabile</span>';
-  if (t.status === true) return '<span class="badge b-ok">gia\' attiva</span>';
+  if (t.status === true) return t.note ? `<span class="badge b-ok" title="${esc(t.note)}">gia' attiva (altro programma)</span>` : '<span class="badge b-ok">gia\' attiva</span>';
   if (t.status === false) return t.kind === "fix" || t.harm_if_off ? '<span class="badge b-bad">da correggere</span>' : '<span class="badge">non attiva</span>';
   if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
   if (t.note) return '<span class="badge">' + esc(t.note) + '</span>';

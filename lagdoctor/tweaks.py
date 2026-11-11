@@ -46,7 +46,8 @@ def run(args, timeout=60):
 
 
 def _hive(name):
-    return {"HKCU": winreg.HKEY_CURRENT_USER, "HKLM": winreg.HKEY_LOCAL_MACHINE}[name]
+    return {"HKCU": winreg.HKEY_CURRENT_USER, "HKLM": winreg.HKEY_LOCAL_MACHINE,
+            "HKU": winreg.HKEY_USERS}[name]
 
 
 def reg_read(hive, path, name):
@@ -115,7 +116,14 @@ class RegTweak(Tweak):
     def values(self):
         return self._values() if callable(self._values) else self._values
 
+    active = None  # funzione(leggi) -> True/False: stato per EFFETTO, se diverso dal semplice confronto dei valori
+
     def status(self):
+        if self.active is not None:
+            try:
+                return self.active(lambda h, p, n: reg_read(h, p, n)[0])
+            except Exception:
+                return None
         vals = self.values()
         if not vals:
             return None
@@ -356,7 +364,22 @@ class DefenderExclusionTweak(Tweak):
         self.path = None  # impostato dall'interfaccia prima di apply
 
     def status(self):
-        return None
+        """Attiva se almeno una cartella di giochi trovata sul PC e' gia' esclusa da Defender (da chiunque)."""
+        code, out = ps("(Get-MpPreference -ErrorAction Stop).ExclusionPath; 'FINE'", timeout=30)
+        if "FINE" not in out:
+            return None
+        excl = [os.path.normcase(l.strip().rstrip("\\")) for l in out.splitlines()
+                if l.strip() and l.strip() != "FINE" and ":" in l]
+        try:
+            from . import games
+            dirs = [os.path.normcase(g["dir"]) for g in games.detect() if g.get("dir")]
+        except Exception:
+            dirs = []
+        if not excl:
+            return False
+        if not dirs:
+            return None
+        return any(d == e or d.startswith(e + os.sep) for d in dirs for e in excl)
 
     def apply(self):
         if not self.path or not os.path.isdir(self.path):
@@ -696,14 +719,16 @@ class VisualFxTweak(Tweak):
         return bool(u.SystemParametersInfoW(0x0049, a.cbSize, ctypes.byref(a), 0x03))
 
     def status(self):
+        """Attiva se gli effetti sono davvero spenti in Windows (animazioni, ombre, dissolvenze, trascinamento...),
+        comunque siano stati spenti: a mano dalla finestra di Windows, da un altro programma o da LagDoctor.
+        Le caselle che LagDoctor lascia accese (caratteri smussati, anteprime) non contano."""
         try:
             states = [self._get(g) for _n, g, _s, _m in self.SPI] + [self._min_animate()]
         except Exception:
             return None
         if any(x is None for x in states):
             return None
-        reg_ok = all(reg_read(h, p, n)[0] == v for h, p, n, _t, v in self.REG if n not in ("VisualFXSetting",))
-        return not any(states) and reg_ok
+        return not any(states)
 
     def apply(self):
         upm, _t = reg_read("HKCU", r"Control Panel\Desktop", "UserPreferencesMask")
@@ -1381,6 +1406,60 @@ RECOMMENDED_EXTRA = {
 for _t in CATALOG:
     if _t.id in RECOMMENDED_EXTRA:
         _t._recommend = lambda s: True
+
+
+# ---------------------------------------------------------------- stato per EFFETTO
+# Queste voci si possono ottenere anche con valori o chiavi diverse (a mano, dalle Impostazioni di Windows, con altri
+# programmi di ottimizzazione): conta l'effetto reale, non il valore esatto che scriverebbe LagDoctor.
+def _int(v, default=None):
+    try:
+        return int(str(v), 0) if not isinstance(v, int) else v
+    except (TypeError, ValueError):
+        return default
+
+
+_ADV = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+_ACC = r"Control Panel\Accessibility"
+ACTIVE_CHECKS = {
+    # "Migliora precisione puntatore" spenta = MouseSpeed 0 (le soglie non contano)
+    "mouse_accel": lambda r: _int(r("HKCU", r"Control Panel\Mouse", "MouseSpeed"), 1) == 0,
+    # scorciatoie di accessibilita': conta solo il bit "scorciatoia attiva" (0x4)
+    "sticky_keys": lambda r: not (_int(r("HKCU", _ACC + r"\StickyKeys", "Flags"), 510) & 0x4),
+    "access_keys": lambda r: not (_int(r("HKCU", _ACC + r"\Keyboard Response", "Flags"), 126) & 0x4) and
+                             not (_int(r("HKCU", _ACC + r"\ToggleKeys", "Flags"), 62) & 0x4),
+    # NTFS "ultimo accesso": disattivato se il bit basso e' 1 (1 = utente, 0x80000001 = sistema)
+    "ntfs_lastaccess": lambda r: (_int(r("HKLM", r"SYSTEM\CurrentControlSet\Control\FileSystem",
+                                          "NtfsDisableLastAccessUpdate"), 0x80000002) & 1) == 1,
+    # Game DVR: basta l'interruttore delle Impostazioni o il criterio
+    "game_dvr": lambda r: _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"), 1) == 0
+                          or _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\GameDVR", "AllowGameDVR"), 1) == 0,
+    # Modalita' Gioco: se il valore non c'e' Windows la considera ACCESA
+    "game_mode": lambda r: _int(r("HKCU", r"Software\Microsoft\GameBar", "AutoGameModeEnabled"), 1) != 0,
+    # Widget: criterio oppure pulsante tolto dalla barra (Impostazioni > Personalizzazione > Barra delle applicazioni)
+    "widgets_off": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests"), 1) == 0
+                             or _int(r("HKCU", _ADV, "TaskbarDa"), 1) == 0,
+    # Copilot: criterio dell'utente o del computer
+    "copilot_off": lambda r: _int(r("HKCU", r"Software\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot"), 0) == 1
+                             or _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot", "TurnOffWindowsCopilot"), 0) == 1,
+    # ricerca del menu Start senza Bing: criterio oppure BingSearchEnabled = 0
+    "start_web_off": lambda r: _int(r("HKCU", r"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions"), 0) == 1
+                               or _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\Search", "BingSearchEnabled"), 1) == 0,
+    # Ottimizzazione recapito senza scambio con altri PC: criterio 0/99/100 o impostazione di Windows 0
+    "delivery_opt": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization", "DODownloadMode"), -1) in (0, 99, 100)
+                              or _int(r("HKU", r"S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings",
+                                        "DownloadMode"), -1) == 0,
+    # telemetria: 0 o 1 (su Home/Pro lo 0 vale come 1) + pubblicita' personalizzata spenta
+    "telemetry_policy": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"), 3) <= 1
+                                  and _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"), 1) == 0,
+    # menu: qualsiasi ritardo breve
+    "menu_delay": lambda r: _int(r("HKCU", r"Control Panel\Desktop", "MenuShowDelay"), 400) <= 50,
+    # IPv4 preferito: bit 0x20, oppure IPv6 tutto disattivato (0xFF)
+    "ipv4_pref": lambda r: bool(_int(r("HKLM", r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents"), 0) & 0x20)
+                           or _int(r("HKLM", r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents"), 0) == 0xFF,
+}
+for _t in CATALOG:
+    if _t.id in ACTIVE_CHECKS and isinstance(_t, RegTweak):
+        _t.active = ACTIVE_CHECKS[_t.id]
 
 
 def force_off(tid):

@@ -142,6 +142,17 @@ DEBLOAT = [
 # ============================================================================ TIMER RESOLUTION
 
 TIMER_TASK = "LagDoctor TimerResolution"
+
+
+def timer_now_ms():
+    """Risoluzione attuale del timer di Windows in ms (es. 0.5, 1.0, 15.625), o None."""
+    try:
+        import ctypes
+        mn, mx, cur = ctypes.c_ulong(), ctypes.c_ulong(), ctypes.c_ulong()
+        ctypes.windll.ntdll.NtQueryTimerResolution(ctypes.byref(mn), ctypes.byref(mx), ctypes.byref(cur))
+        return cur.value / 10000.0
+    except Exception:
+        return None
 TIMER_SCRIPT = r'''# LagDoctor - Timer Resolution: tiene il timer di Windows a 0,5 ms finche' il PC e' acceso.
 import ctypes, time
 from ctypes import wintypes
@@ -177,10 +188,20 @@ class TimerResTweak(Tweak):
         return [pyw if os.path.isfile(pyw) else sys.executable, script]
 
     def status(self):
-        code, out = run(["schtasks", "/Query", "/TN", TIMER_TASK])
+        """Attiva se GlobalTimerResolutionRequests = 1 e il timer di Windows e' davvero a ~0,5 ms, chiunque lo tenga
+        (LagDoctor, EXM, TimerResolution, ISLC...): conta lo stato reale, non chi l'ha impostato."""
         glob = T.reg_read("HKLM", r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel",
                           "GlobalTimerResolutionRequests")[0]
-        return code == 0 and glob == 1
+        code, out = run(["schtasks", "/Query", "/TN", TIMER_TASK])
+        ours = code == 0
+        cur = timer_now_ms()
+        self.note = None
+        if glob == 1 and ours:
+            return True
+        if glob == 1 and cur is not None and cur <= 0.55:
+            self.note = "attivo: timer a %.2f ms tenuto da un altro programma" % cur
+            return True
+        return False
 
     def apply(self):
         from . import paths

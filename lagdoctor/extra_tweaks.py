@@ -178,7 +178,9 @@ class TimerResTweak(Tweak):
 
     def status(self):
         code, out = run(["schtasks", "/Query", "/TN", TIMER_TASK])
-        return code == 0
+        glob = T.reg_read("HKLM", r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel",
+                          "GlobalTimerResolutionRequests")[0]
+        return code == 0 and glob == 1
 
     def apply(self):
         from . import paths
@@ -219,7 +221,8 @@ def repair_timer():
     return True
 
 
-TIMER = [TimerResTweak("timer_res", "CPU ed energia", "Timer Resolution 0,5 ms (automatico, parte con Windows)",
+TIMER = [TimerResTweak("timer_res", "CPU ed energia",
+                       "Timer Resolution 0,5 ms + GlobalTimerResolutionRequests (automatico, parte con Windows)",
                        "LagDoctor imposta il timer di sistema a 0,5 ms e lo mantiene con un piccolo processo "
                        "invisibile che parte a ogni accesso (come il famoso tool TimerResolution).", "media",
                        reboot=True, group="timer", recommend=lambda s: None,

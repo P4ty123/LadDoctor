@@ -1,3 +1,11 @@
+## LagDoctor 5.13.0
+
+- Nuove voci consigliate (applicabili tutte insieme con "Seleziona consigliate"): telemetria e pubblicita' al
+  minimo, effetti visivi, Timer Resolution 0,5 ms, widget spenti, Edge non in background, Recall spento, ricerca
+  del menu Start senza Bing, niente "ultimo accesso" NTFS, scorciatoie Tasti permanenti / Filtro tasti spente,
+  programmi di avvio senza attesa, menu istantanei.
+- "GlobalTimerResolutionRequests" e "Timer Resolution 0,5 ms" sono ora un'unica voce (servono insieme).
+
 ## LagDoctor 5.12.0
 
 - Effetti visivi rifatti: come la finestra "Opzioni prestazioni" di Windows spegne tutte le caselle (animazioni,

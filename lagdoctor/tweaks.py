@@ -1358,6 +1358,30 @@ from . import virt_tweak as _vt  # noqa: E402
 
 _vt.register()
 
+# GlobalTimerResolutionRequests e' ora parte di "Timer Resolution 0,5 ms": tolgo la voce separata dall'elenco
+# (resta annullabile se era stata applicata; applicando il Timer Resolution viene sostituita, stesso gruppo).
+CATALOG[:] = [t for t in CATALOG if t.id != "timer_global"]
+
+# Consigliate anche se non sono "alta/media efficacia": utili su qualsiasi PC, nessuna controindicazione pratica,
+# tutte annullabili. Cosi' "Seleziona consigliate" le applica tutte insieme.
+RECOMMENDED_EXTRA = {
+    "telemetry_policy",   # telemetria e pubblicita' al minimo
+    "visual_fx",          # effetti visivi (caratteri smussati e anteprime restano)
+    "timer_res",          # Timer Resolution 0,5 ms + GlobalTimerResolutionRequests
+    "widgets_off",        # niente widget notizie/meteo in background
+    "edge_bg_off",        # Edge non resta aperto in background
+    "recall_off",         # niente analisi AI degli screenshot
+    "start_web_off",      # ricerca del menu Start senza Bing
+    "ntfs_lastaccess",    # meno scritture inutili sul disco
+    "sticky_keys",        # Shift premuto 5 volte non apre piu' Tasti permanenti durante il gioco
+    "access_keys",        # idem per Filtro tasti / Tasti di alternanza
+    "startup_delay",      # programmi di avvio senza attesa
+    "menu_delay",         # menu istantanei
+}
+for _t in CATALOG:
+    if _t.id in RECOMMENDED_EXTRA:
+        _t._recommend = lambda s: True
+
 
 def force_off(tid):
     """Disattiva un 'mito' attivo anche se non l'ha applicato LagDoctor (torna al valore di Windows)."""

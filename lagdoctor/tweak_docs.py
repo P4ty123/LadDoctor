@@ -597,8 +597,10 @@ doc("app_onedrive",
 # ------------------------------------------------------------------ TIMER RESOLUTION
 doc("timer_res",
     "Il timer di Windows decide ogni quanto il sistema 'si sveglia' per gestire i thread: di default ogni 15,6 ms, "
-    "a meno che un programma non chieda di piu'. LagDoctor lo porta a 0,5 ms con un piccolo processo invisibile che "
-    "parte a ogni accesso (e attiva GlobalTimerResolutionRequests, necessario da Windows 11).",
+    "a meno che un programma non chieda di piu'. Questa voce fa due cose insieme: attiva GlobalTimerResolutionRequests "
+    "(da Windows 10 2004 e su Windows 11 la risoluzione chiesta da un programma vale solo per lui; con questo valore "
+    "torna valida per tutto il sistema) e porta il timer a 0,5 ms con un piccolo processo invisibile che parte a ogni "
+    "accesso, come il famoso tool TimerResolution.",
     "Molti giochi chiedono gia' un timer di 1 ms: a 0,5 ms i limitatori di FPS e le attese brevi sono piu' precisi "
     "e il frame pacing puo' essere piu' regolare. E' uno dei tweak piu' famosi delle community competitive.",
     "Piu' consumi a riposo (la CPU si sveglia piu' spesso). L'effetto dipende dal PC e dal gioco: chi ha misurato "

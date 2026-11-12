@@ -1,3 +1,11 @@
+## LagDoctor 5.18.1
+
+- Overlays, interruttore: acceso = overlay spento (come le altre ottimizzazioni), chiunque l'abbia spento
+  (LagDoctor o tu dal suo programma). Overlay acceso = interruttore spento, sempre libero: lo accendi e premi
+  Applica per spegnere l'overlay. Su un overlay spento da LagDoctor, spegnere l'interruttore lo riaccende.
+- Se riaccendi tu un overlay dal suo programma (Steam, app EA, Ubisoft Connect), LagDoctor non lo rispegne:
+  l'interruttore torna spento e libero, come se non fosse mai stato toccato, e puoi rispegnerlo da qui.
+
 ## LagDoctor 5.18.0
 
 - Overlays: un overlay spento da LagDoctor ora RESTA spento, anche dopo il riavvio del PC. Un piccolo processo

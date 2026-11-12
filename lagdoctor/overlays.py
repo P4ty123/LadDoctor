@@ -398,6 +398,8 @@ class OverlayItem(T.Tweak):
             v = self._setting()
             if v is not None:
                 self.note = None
+                if v and self._off:
+                    forget(self.id)  # riacceso dal programma: scelta tua, LagDoctor non lo rispegne
                 return not v
         if run:
             return False
@@ -502,6 +504,32 @@ def _guard_pids():
     return out
 
 
+def forget(tid):
+    """L'overlay e' stato riacceso dal suo programma: tolgo la voce dalle modifiche di LagDoctor senza annullare
+    niente (l'interruttore torna libero, come se LagDoctor non l'avesse mai toccato)."""
+    try:
+        if not T.STATE_FILE:  # nel guardiano (processo a parte) il file delle modifiche non e' ancora impostato
+            from . import paths
+            T.init(paths.DATA_DIR)
+        st = T.load_state()
+    except Exception:
+        return
+    if tid in st:
+        b = st[tid].get("backup") or {}
+        for it in b.get("startup") or []:  # l'avvio con Windows tolto da LagDoctor torna com'era
+            try:
+                T.set_startup(it, True)
+            except Exception:
+                pass
+        st = T.load_state()
+        st.pop(tid, None)
+        T.save_state(st)
+        try:
+            guard_sync()
+        except Exception:
+            pass
+
+
 def guard_install(start=True):
     """Attivita' all'accesso + avvio subito (se non gira gia')."""
     from . import paths
@@ -546,15 +574,14 @@ def guard_once(check_settings):
     if blocked and blocked & running_names(0):
         kill(blocked)
     if check_settings:
-        names = running_names(0)
         for t in ITEMS:
-            if t.id in st and t._off and t._setting and not (set(t.app_procs) & names):
+            if t.id in st and t._off and t._setting:
                 try:
-                    if t._setting() is True:  # il programma l'ha riacceso (es. dopo un aggiornamento)
-                        t._off()
+                    if t._setting() is True:  # riacceso dal suo programma: lo lascio acceso (rispegnibile da LagDoctor)
+                        forget(t.id)
                 except Exception:
                     pass
-    return len(st)
+    return len(_state())
 
 
 def guard_main(interval=5):
@@ -602,7 +629,7 @@ ITEMS = [
         warning="Senza overlay non funzionano chat, guida e browser di Steam dentro il gioco, e in alcuni giochi "
                 "i controller configurati con Steam Input.",
         off=steam_disable, on=steam_restore, closes="Steam", app_procs=("steam.exe",), efficacy="bassa",
-        how_ld="LagDoctor chiude Steam (come dal menu Esci) e spegne l'overlay nelle sue impostazioni per tutti i giochi. Riapri Steam quando vuoi: l'overlay resta spento, e se l'impostazione venisse riaccesa LagDoctor la rimette."),
+        how_ld="LagDoctor chiude Steam (come dal menu Esci) e spegne l'overlay nelle sue impostazioni per tutti i giochi. Riapri Steam quando vuoi: l'overlay resta spento finche' non lo riaccendi tu (da qui o da Steam)."),
     OverlayItem(
         "ov_nvidia", "Overlay NVIDIA (NVIDIA App / GeForce Experience)",
         "Alt+Z: statistiche, filtri, screenshot e Instant Replay",
@@ -657,7 +684,7 @@ ITEMS = [
         "App EA > menu (tre linee in alto a sinistra) > Impostazioni > Applicazione > disattiva \"Overlay in gioco\".",
         lambda: _exists(_pf("Electronic Arts", "EA Desktop")), procs=("igoproxy64.exe", "igoproxy.exe"),
         setting=ea_overlay_enabled, off=ea_disable, on=ea_restore, closes="app EA", app_procs=("eadesktop.exe",),
-        how_ld="LagDoctor chiude l'app EA e spegne l'overlay nel suo file delle impostazioni (user.igoenabled=0). Se l'app EA lo riaccende (succede dopo i suoi aggiornamenti), LagDoctor lo rispegne appena l'app viene chiusa."),
+        how_ld="LagDoctor chiude l'app EA e spegne l'overlay nel suo file delle impostazioni (user.igoenabled=0). Resta spento finche' non lo riaccendi tu. Se lo trovi riacceso (l'app EA lo fa dopo alcuni aggiornamenti), l'interruttore torna spento e lo rispegni da qui."),
     OverlayItem(
         "ov_ubisoft", "Overlay di Ubisoft Connect",
         "Menu Maiusc+F2 dentro i giochi Ubisoft",
@@ -665,7 +692,7 @@ ITEMS = [
         "giochi supportati\".",
         lambda: _exists(_pf86("Ubisoft", "Ubisoft Game Launcher")), setting=ubisoft_overlay_enabled,
         off=ubisoft_disable, on=ubisoft_restore, closes="Ubisoft Connect", app_procs=("upc.exe",),
-        how_ld="LagDoctor chiude Ubisoft Connect e spegne l'overlay nelle sue impostazioni. Resta spento: se venisse riacceso, LagDoctor lo rimette appena Ubisoft Connect viene chiuso."),
+        how_ld="LagDoctor chiude Ubisoft Connect e spegne l'overlay nelle sue impostazioni. Resta spento finche' non lo riaccendi tu (da qui o da Ubisoft Connect)."),
     OverlayItem(
         "ov_gog", "Overlay di GOG Galaxy",
         "Menu Maiusc+Tab dentro i giochi GOG",

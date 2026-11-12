@@ -397,7 +397,7 @@ function dotsHtml(t) {
 function stateHtml(t) {
   if (t.kind === "overlay") {
     if (S.sel.has(t.id)) return '<span class="badge b-acc">da spegnere</span>';
-    if (t.applied) return '<span class="badge b-ok" title="LagDoctor lo tiene spento anche dopo il riavvio">spento da LagDoctor</span>';
+    if (t.applied && !(t.running && t.running.length)) return '<span class="badge b-ok" title="LagDoctor lo tiene spento anche dopo il riavvio">spento da LagDoctor</span>';
     if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
     if (t.running && t.running.length) return '<span class="badge b-warn" title="in esecuzione adesso">attivo ora</span>';
     if (t.status === false) return '<span class="badge b-warn">acceso</span>';
@@ -428,14 +428,16 @@ function switchHtml(t) {
 /* overlay: l'interruttore mostra l'OVERLAY (acceso = l'overlay e' acceso). Spegnendolo lo si seleziona per Applica. */
 /* spento da LagDoctor = resta spento (lo tiene spento il guardiano anche se per un attimo si riapre) */
 const ovOn = (t) => !t.applied && (!isOn(t) || (t.running && t.running.length > 0));
+/* interruttore ACCESO = overlay SPENTO (come le altre ottimizzazioni: acceso = ottimizzazione attiva),
+   chiunque l'abbia spento (LagDoctor o tu dal programma). Overlay acceso = interruttore spento, sempre libero. */
 function ovSwitchHtml(t) {
-  const pend = S.sel.has(t.id), on = ovOn(t) && !pend;
+  const pend = S.sel.has(t.id), on = !ovOn(t) || pend;
   let tip, dis = false;
   if (t.ignored) { dis = true; tip = "Voce ignorata"; }
-  else if (pend) tip = "Verra' spento quando premi Applica (riaccendi l'interruttore per annullare)";
-  else if (t.applied) tip = "Spento da LagDoctor (resta spento): riaccendi per rimetterlo come prima";
-  else if (!ovOn(t)) tip = "Spento dal programma: se si riaccende, qui l'interruttore torna acceso e potrai spegnerlo da LagDoctor";
-  else tip = "Spegni l'interruttore e premi Applica per spegnere questo overlay";
+  else if (pend) tip = "Verra' spento quando premi Applica (spegni di nuovo l'interruttore per annullare)";
+  else if (t.applied) tip = "Overlay spento da LagDoctor (resta spento): spegni l'interruttore per riaccenderlo";
+  else if (!ovOn(t)) tip = "Overlay spento dal suo programma";
+  else tip = "Overlay acceso: accendi l'interruttore e premi Applica per spegnerlo";
   return `<label class="switch${pend ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
 }
 function rowHtml(t) {
@@ -509,10 +511,10 @@ function renderTweaks() {
     const id = cb.dataset.sw, t = tws().find((x) => x.id === id);
     if (!t) return;
     if (t.kind === "overlay") {
-      if (S.sel.has(id)) S.sel.delete(id);                                  // riacceso prima di applicare
-      else if (t.applied) { e.target.checked = false; return revertIds([id]); }  // riaccendo (lo rimetto come prima)
-      else if (ovOn(t) && !t.ignored && !t.manual) S.sel.add(id);  // da spegnere
-      else { e.target.checked = false; toast("Questo overlay l'hai spento dal suo programma: e' gia' spento. Se si riaccende, qui l'interruttore torna acceso e potrai spegnerlo da LagDoctor.", 6000); }
+      if (S.sel.has(id)) S.sel.delete(id);                                   // annullo la selezione
+      else if (t.applied) { e.target.checked = true; return revertIds([id]); }  // riaccendo l'overlay (come prima)
+      else if (ovOn(t) && !t.ignored && !t.manual) S.sel.add(id);             // da spegnere con Applica
+      else { e.target.checked = true; toast("Questo overlay e' gia' spento: l'hai spento dal suo programma. Per riaccenderlo usa il programma; se lo riaccendi, qui l'interruttore torna spento e potrai rispegnerlo da LagDoctor.", 7000); }
       return renderTweaks();
     }
     if (t.applied) { e.target.checked = true; return revertIds([id]); }
@@ -528,7 +530,7 @@ function renderTweaks() {
   $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
   if (S.twCat === OV_CAT) { const rb = $("#ov-refresh"); if (rb) rb.onclick = () => loadOverlays(true); if (!S.ovLoaded) loadOverlays(false); }
   const n = S.sel.size;
-  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : S.twCat === OV_CAT ? "Overlay: spegni l'interruttore di quelli che vuoi disattivare e premi Applica. Voci di Windows: accendi l'interruttore e premi Applica."
+  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : S.twCat === OV_CAT ? "Accendi l'interruttore delle voci che vuoi e premi Applica. Overlay: interruttore acceso = overlay spento."
     : "Accendi l'interruttore delle voci che vuoi e premi Applica. Clicca sul nome di una voce per leggere cosa fa.";
   $("#apply-btn").disabled = !n;
 }

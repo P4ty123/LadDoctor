@@ -728,6 +728,8 @@ async function gamemodePage(scanAgain) {
       <div class="grow"><b>${esc(o.name)}</b>${o.default ? "" : ' <span class="badge">facoltativa</span>'}
         <div class="mut" style="font-size:13px">${esc(o.what)}</div>
         ${o.id === "affinity" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Il tuo processore${r.cpu && r.cpu.cpu ? " (" + esc(r.cpu.cpu) + ")" : ""}:</b> ${r.cpu ? (r.cpu.apply ? "<b>affinita' utile</b>, verra' applicata. " : "<b>affinita' non utile</b>, non verra' applicata. ") + esc(r.cpu.why || "") : "non leggibile."}</div>` : ""}
+        ${o.id === "eco_bg" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Il tuo processore${r.cpu && r.cpu.cpu ? " (" + esc(r.cpu.cpu) + ")" : ""}:</b> ${r.eco ? (r.eco.apply ? "<b>modalita' efficienza utile</b>, verra' usata. " : "<b>non serve</b>, resta la priorita' bassa. ") + esc(r.eco.why || "") : "non leggibile."}</div>` : ""}
+        ${o.id === "gpu_pref" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Schede video di questo PC:</b> ${r.gpus && r.gpus.length ? esc(r.gpus.join(", ")) : "non leggibili"}. ${r.gpus && r.gpus.length >= 2 ? "<b>Due schede video</b>: l'opzione serve." : "<b>Una sola scheda video</b>: anche accesa non fa niente."}</div>` : ""}
         <div style="font-size:12px;margin-top:3px"><b>Possibili problemi:</b> <span class="mut">${esc(o.risk)}</span></div></div></div>`).join("")}
     <p class="mut" style="font-size:12px">Niente priorita' "In tempo reale": puo' bloccare mouse, tastiera e audio.</p>`;
 

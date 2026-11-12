@@ -1,3 +1,16 @@
+## LagDoctor 5.19.0
+
+- Game mode, nuove opzioni:
+  - "Manutenzione di Windows in pausa" (accesa): durante il gioco vengono sospese le attivita' pianificate che
+    partono a orari casuali (telemetria CompatTelRunner, scansioni pianificate e manutenzione di Defender,
+    ottimizzazione dischi, diagnostica, aggiornamenti di Office) e la Manutenzione automatica. Se una era gia'
+    partita viene chiusa una volta: non si riapre perche' le attivita' restano sospese. Tutto riparte a fine partita.
+  - "Modalita' efficienza per i programmi in background" (accesa, decide LagDoctor): usata solo dove rende di piu'
+    della priorita' bassa (processori con core di due tipi e portatili); sugli altri resta la priorita' bassa.
+  - "Svuota la memoria in standby quando la RAM libera sta finendo" (facoltativa): solo sotto 1 GB liberi.
+  - "Scheda video ad alte prestazioni per i giochi" (facoltativa): solo sui PC con due schede video.
+- Verifica dal vivo della game mode: righe per le nuove opzioni.
+
 ## LagDoctor 5.18.1
 
 - Overlays, interruttore: acceso = overlay spento (come le altre ottimizzazioni), chiunque l'abbia spento

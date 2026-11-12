@@ -253,7 +253,15 @@ def gamemode_json(scan=False):
         cpu = gamemode.cputopo.decide()
     except Exception:
         cpu = None
-    return {"config": c, "status": gamemode.status(), "added": added, "cpu": cpu,
+    try:
+        eco = gamemode.cputopo.eco_decide()
+    except Exception:
+        eco = None
+    try:
+        gpus = gamemode.gpu_names()
+    except Exception:
+        gpus = []
+    return {"config": c, "status": gamemode.status(), "added": added, "cpu": cpu, "eco": eco, "gpus": gpus,
             "options": [{"id": k, "default": d, "name": n, "what": w, "risk": r} for k, d, n, w, r in gamemode.OPTIONS],
             "priorities": [{"id": k, "name": v[0]} for k, v in gamemode.PRIORITY.items()]}
 

@@ -78,6 +78,48 @@ def parse(raw):
     return {"logical": sum(len(c["cpus"]) for c in cores), "cores": cores, "l3": l3}
 
 
+def _has_battery():
+    """True se il PC ha una batteria (portatile): la modalita' efficienza libera potenza per il gioco."""
+    try:
+        class SPS(ctypes.Structure):
+            _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte),
+                        ("BatteryLifePercent", ctypes.c_ubyte), ("SystemStatusFlag", ctypes.c_ubyte),
+                        ("BatteryLifeTime", ctypes.c_ulong), ("BatteryFullLifeTime", ctypes.c_ulong)]
+        s = SPS()
+        if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(s)):
+            return False
+        return s.BatteryFlag not in (128, 255)  # 128 = nessuna batteria, 255 = sconosciuto
+    except Exception:
+        return False
+
+
+def eco_decide(topo=None, name=None, battery=None):
+    """Modalita' efficienza (EcoQoS) per i programmi in background: {"apply": bool, "why": str}.
+
+    Rende di piu' della sola priorita' bassa dove i core non sono tutti uguali o dove la potenza e' limitata:
+      - Intel ibridi (core P + E): Windows sposta i programmi in background sui core E -> core P liberi per il gioco
+      - Ryzen con core di due tipi (Zen 5 + Zen 5c dei portatili): idem sui core 'c'
+      - portatili: i programmi in background girano a frequenza bassa -> piu' potenza e meno calore per il gioco
+    Su un desktop con tutti i core uguali (es. Ryzen 9800X3D) non cambia niente rispetto alla priorita' bassa: la
+    CPU non e' limitata dalla potenza mentre giochi, quindi resta spenta."""
+    topo = topo if topo is not None else read()
+    name = name if name is not None else cpu_name()
+    battery = _has_battery() if battery is None else battery
+    if not topo:
+        return {"apply": False, "why": "Non riesco a leggere la struttura del processore: resta la priorita' bassa."}
+    effs = {c["eff"] for c in topo["cores"]}
+    kind = decide(topo, name).get("kind")
+    if len(effs) >= 2 or kind in ("intel_ibrido", "intel_ibrido_pochi_p", "ryzen_ibrido"):
+        return {"apply": True, "why": "Processore con core di due tipi: i programmi in background vengono spostati "
+                                      "sui core piu' piccoli e i core piu' veloci restano liberi per il gioco."}
+    if battery:
+        return {"apply": True, "why": "Portatile: i programmi in background girano a frequenza bassa, cosi' resta "
+                                      "piu' potenza (e meno calore) per il gioco."}
+    return {"apply": False, "why": "Tutti i core sono uguali e un PC fisso non e' limitato dalla potenza mentre "
+                                   "giochi: la modalita' efficienza non darebbe niente in piu' della priorita' bassa, "
+                                   "quindi non viene usata."}
+
+
 def decide(topo=None, name=None):
     """{"apply": bool, "cpus": [...], "kind": str, "why": str} per questo PC."""
     topo = topo if topo is not None else read()

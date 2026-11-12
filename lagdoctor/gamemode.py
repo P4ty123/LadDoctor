@@ -77,6 +77,11 @@ OPTIONS = [
      "gioco non ne ha bisogno. Esclusi chat vocale (Discord, TeamSpeak), OBS, overlay, launcher, software di "
      "mouse/tastiera/audio e anti-cheat.",
      "Un video aperto nel browser sull'altro schermo potrebbe scattare se il gioco usa tutta la CPU."),
+    ("eco_bg", True, "Modalita' efficienza per i programmi in background (decide LagDoctor in base al processore)",
+     "Come la 'Modalita' efficienza' di Gestione attivita': oltre alla priorita' bassa, Windows fa girare i "
+     "programmi in background sui core piu' piccoli e a frequenza bassa. Si usa solo dove rende di piu' della "
+     "priorita' bassa: processori con core di due tipi (Intel P+E, Ryzen con core 'c') e portatili.",
+     "Un programma in background pesante (es. una conversione video) va piu' piano mentre giochi."),
     ("close_apps", True, "Chiudi componenti di Windows inutili (come la modalita' Xbox)",
      "Chiude Widget, Collegamento al telefono, Copilot e gli aggiornamenti automatici di Edge/Google. La "
      "modalita' Xbox di Windows libera RAM proprio non caricando questi componenti.",
@@ -92,10 +97,21 @@ OPTIONS = [
      "Ferma Windows Update, BITS, Ottimizzazione recapito e gli aggiornamenti di Edge, Google, Firefox e Adobe: "
      "niente download che rubano banda e disco mentre giochi. Ripartono alla fine.",
      "Gli aggiornamenti vengono scaricati dopo la partita."),
+    ("maintenance", True, "Manutenzione di Windows in pausa",
+     "Durante il gioco non partono le attivita' pianificate che usano CPU e disco a orari casuali: telemetria di "
+     "compatibilita' (CompatTelRunner), scansioni pianificate e manutenzione di Defender, deframmentazione/ottimizzazione "
+     "dischi, diagnostica, aggiornamenti di Office e la Manutenzione automatica di Windows. Se una era gia' partita "
+     "viene chiusa una volta: non si riapre perche' le attivita' restano sospese fino alla fine della partita.",
+     "Nessuno: tutto riparte quando chiudi il gioco. La protezione in tempo reale di Defender resta attiva."),
     ("trim_ram", True, "Libera la RAM dei programmi in background",
      "All'avvio del gioco Windows sposta su disco la memoria non usata dei programmi in background (come fa la "
      "modalita' Xbox): piu' RAM libera per il gioco.",
      "Tornando a quei programmi possono esserci 1-2 secondi di lentezza. Con 32 GB il guadagno in FPS e' minimo."),
+    ("standby_purge", False, "Svuota la memoria in standby quando la RAM libera sta finendo",
+     "Come ISLC: se durante il gioco la RAM davvero libera scende sotto 1 GB e Windows tiene piu' di 1 GB in "
+     "'standby' (file letti di recente), la svuota cosi' il gioco non aspetta che Windows la liberi. Interviene "
+     "solo quando serve, al massimo una volta al minuto.",
+     "Con tanta RAM non interviene quasi mai. Subito dopo, aprire un programma gia' usato puo' essere un po' piu' lento."),
     ("timer", True, "Timer di sistema a 0,5 ms",
      "Mentre giochi il timer di Windows resta alla risoluzione massima: frame limiter e input piu' regolari.",
      "Consumo leggermente piu' alto, solo durante il gioco."),
@@ -106,6 +122,12 @@ OPTIONS = [
     ("power_plan", False, "Piano energetico Prestazioni elevate durante il gioco",
      "Attiva il piano 'Prestazioni elevate' solo mentre giochi e rimette il tuo piano alla fine.",
      "Se usi gia' un piano energetico personalizzato (di un programma di ottimizzazione o creato da te), lascialo disattivato."),
+    ("gpu_pref", False, "Scheda video ad alte prestazioni per i giochi (PC con due schede video)",
+     "Sui PC con due schede video (portatili, o processore con grafica integrata + scheda dedicata) Windows a volte "
+     "fa girare il gioco su quella integrata. LagDoctor imposta per ogni gioco 'Prestazioni elevate' (come "
+     "Impostazioni > Schermo > Grafica). Vale dalla prossima apertura del gioco e resta finche' l'opzione e' accesa. "
+     "Con una sola scheda video non fa niente.",
+     "Nessuno. Se avevi gia' scelto una scheda per quel gioco, la tua scelta resta."),
     ("close_shell", False, "Chiudi Esplora risorse (modalita' Xbox completa)",
      "Come la modalita' Xbox: chiude Esplora risorse, barra delle applicazioni, Start e ricerca mentre giochi "
      "(circa 150-400 MB di RAM e qualche processo in meno). Vengono riaperti quando chiudi il gioco.",
@@ -123,6 +145,36 @@ SERVICES = {
     "stop_updates": ["wuauserv", "UsoSvc", "BITS", "DoSvc", "edgeupdate", "edgeupdatem", "gupdate", "gupdatem",
                      "MozillaMaintenance", "AdobeARMservice"],
 }
+# attivita' pianificate di manutenzione: sospese durante il gioco (quelle che non esistono vengono saltate)
+MAINT_TASKS = [
+    r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+    r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser Exp",
+    r"\Microsoft\Windows\Application Experience\ProgramDataUpdater",
+    r"\Microsoft\Windows\Application Experience\PcaPatchDbTask",
+    r"\Microsoft\Windows\Application Experience\StartupAppTask",
+    r"\Microsoft\Windows\Customer Experience Improvement Program\Consolidator",
+    r"\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip",
+    r"\Microsoft\Windows\DiskDiagnostic\Microsoft-Windows-DiskDiagnosticDataCollector",
+    r"\Microsoft\Windows\Windows Defender\Windows Defender Scheduled Scan",
+    r"\Microsoft\Windows\Windows Defender\Windows Defender Cache Maintenance",
+    r"\Microsoft\Windows\Windows Defender\Windows Defender Cleanup",
+    r"\Microsoft\Windows\Windows Defender\Windows Defender Verification",
+    r"\Microsoft\Windows\Defrag\ScheduledDefrag",
+    r"\Microsoft\Windows\Maintenance\WinSAT",
+    r"\Microsoft\Windows\Power Efficiency Diagnostics\AnalyzeSystem",
+    r"\Microsoft\Windows\Windows Error Reporting\QueueReporting",
+    r"\Microsoft\Windows\Feedback\Siuf\DmClient",
+    r"\Microsoft\Office\Office Automatic Updates 2.0",
+    r"\Microsoft\Office\Office Feature Updates",
+    r"\Microsoft\Office\Office Feature Updates Logon",
+]
+# processi lanciati da quelle attivita': chiusi una volta se erano gia' partiti (con le attivita' sospese non ripartono)
+MAINT_PROCS = {"compattelrunner.exe", "devicecensus.exe", "officec2rclient.exe", "dfrgui.exe", "defrag.exe",
+               "winsat.exe", "dmclient.exe"}
+MAINT_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance"
+GPU_PREF_FILE = os.path.join(ROOT, "gamemode_gpu_preferita.json")  # giochi a cui LagDoctor ha dato la GPU dedicata
+GPU_PREF_KEY = r"Software\Microsoft\DirectX\UserGpuPreferences"
+
 # mai toccati (priorita' e chiusura)
 PROTECT = {
     "explorer.exe", "dwm.exe", "csrss.exe", "winlogon.exe", "services.exe", "lsass.exe", "svchost.exe", "smss.exe",
@@ -449,6 +501,140 @@ def _io_mem_set(pid, io=None, mem=None):
         return False
 
 
+def _eco(pid, on):
+    """Modalita' efficienza (EcoQoS) di un processo: on=True la accende, on=False la riporta a come decide Windows."""
+    try:
+        class PPTS(ctypes.Structure):
+            _fields_ = [("Version", ctypes.c_ulong), ("ControlMask", ctypes.c_ulong), ("StateMask", ctypes.c_ulong)]
+        k32, h = _open(pid, 0x0200 | 0x1000)
+        if not h:
+            return False
+        try:
+            st = PPTS(1, 0x1 if on else 0, 0x1 if on else 0)  # PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+            k32.SetProcessInformation.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong]
+            return bool(k32.SetProcessInformation(h, 4, ctypes.byref(st), ctypes.sizeof(st)))  # ProcessPowerThrottling
+        finally:
+            k32.CloseHandle(h)
+    except Exception:
+        return False
+
+
+def _memlists():
+    """(MB liberi davvero, MB in standby) oppure (None, None)."""
+    try:
+        P = ctypes.c_size_t
+
+        class SMLI(ctypes.Structure):
+            _fields_ = [("Zero", P), ("Free", P), ("Modified", P), ("ModifiedNoWrite", P), ("Bad", P),
+                        ("Standby", P * 8), ("Repurposed", P * 8), ("ModifiedPageFile", P)]
+        _enable_privilege("SeProfileSingleProcessPrivilege")
+        info = SMLI()
+        nt = ctypes.windll.ntdll
+        nt.NtQuerySystemInformation.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong, ctypes.c_void_p]
+        if nt.NtQuerySystemInformation(80, ctypes.byref(info), ctypes.sizeof(info), None) != 0:
+            return None, None
+        page = 4096
+        return (info.Zero + info.Free) * page // 2**20, sum(info.Standby) * page // 2**20
+    except Exception:
+        return None, None
+
+
+def _purge_standby():
+    try:
+        _enable_privilege("SeProfileSingleProcessPrivilege")
+        cmd = ctypes.c_int(4)  # MemoryPurgeStandbyList
+        nt = ctypes.windll.ntdll
+        nt.NtSetSystemInformation.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_ulong]
+        return nt.NtSetSystemInformation(80, ctypes.byref(cmd), ctypes.sizeof(cmd)) == 0
+    except Exception:
+        return False
+
+
+def gpu_names():
+    """Schede video del PC (senza quelle virtuali di Windows/desktop remoto)."""
+    out = []
+    try:
+        from ctypes import wintypes
+
+        class DD(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("DeviceName", wintypes.WCHAR * 32), ("DeviceString", wintypes.WCHAR * 128),
+                        ("StateFlags", wintypes.DWORD), ("DeviceID", wintypes.WCHAR * 128), ("DeviceKey", wintypes.WCHAR * 128)]
+        i = 0
+        while i < 64:
+            d = DD()
+            d.cb = ctypes.sizeof(d)
+            if not ctypes.windll.user32.EnumDisplayDevicesW(None, i, ctypes.byref(d), 0):
+                break
+            i += 1
+            n = d.DeviceString.strip()
+            if d.StateFlags & 0x8:  # DISPLAY_DEVICE_MIRRORING_DRIVER
+                continue
+            if not n or any(w in n.lower() for w in ("microsoft", "remote", "virtual", "parsec", "meta ", "citrix")):
+                continue
+            if (n, d.DeviceID.split("\\")[0:2]) not in [(x, y) for x, y in out]:
+                out.append((n, d.DeviceID.split("\\")[0:2]))
+    except Exception:
+        return []
+    return sorted({n for n, _ in out})
+
+
+def _reg_hkcu():
+    import winreg
+    return winreg
+
+
+def gpu_pref_set(exe):
+    """Imposta 'Prestazioni elevate' per un gioco, solo se l'utente non ha gia' scelto. True se l'ha impostata ora."""
+    if not exe:
+        return False
+    w = _reg_hkcu()
+    try:
+        with w.CreateKeyEx(w.HKEY_CURRENT_USER, GPU_PREF_KEY, 0, w.KEY_READ | w.KEY_WRITE) as k:
+            try:
+                cur = w.QueryValueEx(k, exe)[0]
+            except OSError:
+                cur = None
+            if cur and "GpuPreference=" in cur:
+                return False  # scelta gia' fatta (da te o da Windows): non la tocco
+            w.SetValueEx(k, exe, 0, w.REG_SZ, (cur or "") + "GpuPreference=2;")
+    except OSError:
+        return False
+    d = _load(GPU_PREF_FILE, {})
+    d[exe] = cur
+    _save(GPU_PREF_FILE, d)
+    return True
+
+
+def gpu_pref_clear():
+    """Toglie solo le scelte fatte da LagDoctor (opzione spenta o game mode spenta)."""
+    d = _load(GPU_PREF_FILE, {})
+    if not d:
+        return 0
+    w = _reg_hkcu()
+    n = 0
+    try:
+        with w.CreateKeyEx(w.HKEY_CURRENT_USER, GPU_PREF_KEY, 0, w.KEY_READ | w.KEY_WRITE) as k:
+            for exe, prev in d.items():
+                try:
+                    cur = w.QueryValueEx(k, exe)[0]
+                except OSError:
+                    continue
+                if "GpuPreference=2;" not in cur:
+                    continue  # cambiata dopo (da te): la lascio
+                if prev:
+                    w.SetValueEx(k, exe, 0, w.REG_SZ, prev)
+                else:
+                    w.DeleteValue(k, exe)
+                n += 1
+    except OSError:
+        pass
+    try:
+        os.remove(GPU_PREF_FILE)
+    except OSError:
+        pass
+    return n
+
+
 def _trim(pid):
     try:
         k32, h = _open(pid, 0x0100 | 0x0400)  # SET_QUOTA | QUERY_INFORMATION
@@ -531,6 +717,11 @@ class Engine:
         except Exception:
             self.cpu = {"apply": False}
         try:
+            self.eco = cputopo.eco_decide()
+        except Exception:
+            self.eco = {"apply": False}
+        self._purge_t = 0
+        try:
             self.my_user = psutil.Process().username()
         except Exception:
             pass
@@ -576,8 +767,71 @@ class Engine:
         if svcs:
             self._stop_services(svcs)
         self._close_processes(opts)
+        if opts.get("maintenance"):
+            self._pause_maintenance()
         if opts.get("trim_ram"):
             self._trim_background()
+
+    def _pause_maintenance(self):
+        """Sospende le attivita' pianificate di manutenzione e la Manutenzione automatica (ripristinate alla fine)."""
+        lst = ",".join("'%s'" % t.replace("'", "''") for t in MAINT_TASKS)
+        code, out = _ps("foreach ($p in @(%s)) { $i = $p.LastIndexOf('\\'); $tp = $p.Substring(0, $i + 1); "
+                        "$tn = $p.Substring($i + 1); $t = Get-ScheduledTask -TaskPath $tp -TaskName $tn "
+                        "-ErrorAction SilentlyContinue; if ($t -and $t.State -ne 'Disabled') { "
+                        "if ($t.State -eq 'Running') { Stop-ScheduledTask -TaskPath $tp -TaskName $tn "
+                        "-ErrorAction SilentlyContinue }; try { Disable-ScheduledTask -TaskPath $tp -TaskName $tn "
+                        "-ErrorAction Stop | Out-Null; 'DIS:' + $p } catch { 'ERR:' + $p } } }; 'FINE'" % lst,
+                        timeout=120)
+        done = [l[4:].strip() for l in out.splitlines() if l.startswith("DIS:")]
+        bad = [l[4:].strip() for l in out.splitlines() if l.startswith("ERR:")]
+        self.j["maint_tasks"] = done
+        try:
+            import winreg as w
+            try:
+                with w.OpenKey(w.HKEY_LOCAL_MACHINE, MAINT_KEY, 0, w.KEY_READ | w.KEY_WOW64_64KEY) as k:
+                    prev = w.QueryValueEx(k, "MaintenanceDisabled")[0]
+            except OSError:
+                prev = None
+            if prev != 1:
+                with w.CreateKeyEx(w.HKEY_LOCAL_MACHINE, MAINT_KEY, 0, w.KEY_WRITE | w.KEY_WOW64_64KEY) as k:
+                    w.SetValueEx(k, "MaintenanceDisabled", 0, w.REG_DWORD, 1)
+                self.j["maint_prev"] = "assente" if prev is None else prev
+        except Exception as e:
+            log("manutenzione automatica: %s" % e)
+        self._jsave()
+        killed = self.kill_maintenance()
+        self.act("Manutenzione di Windows in pausa: %d attivita' sospese%s%s" % (
+            len(done), (", chiusi: " + ", ".join(killed)) if killed else "",
+            " (%d protette da Windows)" % len(bad) if bad else ""))
+        if bad:
+            log("attivita' non sospese (protette): " + ", ".join(bad))
+
+    def kill_maintenance(self):
+        """Chiude i processi di manutenzione gia' partiti. Con le attivita' sospese non vengono rilanciati."""
+        out = []
+        for p in psutil.process_iter(["name"]):
+            n = (p.info["name"] or "").lower()
+            if n in MAINT_PROCS:
+                try:
+                    p.kill()
+                    out.append(n)
+                except psutil.Error:
+                    pass
+        return sorted(set(out))
+
+    def standby_check(self, every=60):
+        """Svuota la memoria in standby solo se la RAM libera sta davvero finendo (al massimo una volta al minuto)."""
+        now = time.time()
+        if now - self._purge_t < every:
+            return
+        free, standby = _memlists()
+        if free is None or free >= 1024 or standby < 1024:
+            return
+        self._purge_t = now
+        if _purge_standby():
+            self.j["purges"] = self.j.get("purges", 0) + 1
+            self._jsave()
+            self.act("Memoria in standby svuotata (%d MB liberi, %d MB in standby)" % (free, standby))
 
     def _stop_services(self, names):
         lst = ",".join("'%s'" % n for n in names)
@@ -663,6 +917,13 @@ class Engine:
         except psutil.Error:
             return
         self.game_pids[proc.pid] = info
+        if opts.get("gpu_pref") and len(gpu_names()) >= 2:
+            try:
+                exe = proc.exe()
+            except psutil.Error:
+                exe = None
+            if exe and gpu_pref_set(exe):
+                self.act("%s: scheda video ad alte prestazioni impostata (vale dalla prossima apertura)" % info["name"])
         ac = game.get("anticheat") or self._ac_now(game, running_names)
         if ac:
             info["anticheat"] = ac
@@ -797,7 +1058,9 @@ class Engine:
             if prev != 0x20:  # solo quelli a priorita' Normale
                 return False
             p.nice(0x4000)    # BELOW_NORMAL
-            rec = [p.create_time(), prev, p.info.get("name") or p.name(), None, None, vendor]
+            rec = [p.create_time(), prev, p.info.get("name") or p.name(), None, None, vendor, False]
+            if getattr(self, "_eco_on", False) and _eco(p.pid, True):
+                rec[6] = True
             if io_mem:
                 pio, pmem = _io_mem_get(p.pid)
                 if _io_mem_set(p.pid, IO_LOW if pio is not None and pio > IO_LOW else None,
@@ -812,6 +1075,7 @@ class Engine:
         """Chiamata a ogni giro: abbassa anche i programmi aperti dopo l'avvio del gioco."""
         opts = opts or DEFAULT_OPTS
         io_mem = bool(opts.get("bg_io"))
+        self._eco_on = bool(opts.get("eco_bg")) and bool(self.eco.get("apply"))
         changed = 0
         if opts.get("bg_priority"):
             for p in self._user_bg(only_new=True):
@@ -852,6 +1116,8 @@ class Engine:
                     p.nice(prev)
                     if len(rec) > 4 and (rec[3] is not None or rec[4] is not None):
                         _io_mem_set(p.pid, rec[3], rec[4])
+                    if len(rec) > 6 and rec[6]:
+                        _eco(p.pid, False)
             except (psutil.Error, ValueError):
                 pass
         for pol in j.get("qos", []):
@@ -865,6 +1131,21 @@ class Engine:
         for exe in j.get("restart", []):
             if os.path.isfile(exe):
                 launch_as_user(exe, "/background")
+        if j.get("maint_tasks"):
+            lst = ",".join("'%s'" % t.replace("'", "''") for t in j["maint_tasks"])
+            _ps("foreach ($p in @(%s)) { $i = $p.LastIndexOf('\\'); Enable-ScheduledTask -TaskPath "
+                "$p.Substring(0, $i + 1) -TaskName $p.Substring($i + 1) -ErrorAction SilentlyContinue | Out-Null }"
+                % lst, timeout=120)
+        if j.get("maint_prev") is not None:
+            try:
+                import winreg as w
+                with w.CreateKeyEx(w.HKEY_LOCAL_MACHINE, MAINT_KEY, 0, w.KEY_WRITE | w.KEY_WOW64_64KEY) as k:
+                    if j["maint_prev"] == "assente":
+                        w.DeleteValue(k, "MaintenanceDisabled")
+                    else:
+                        w.SetValueEx(k, "MaintenanceDisabled", 0, w.REG_DWORD, int(j["maint_prev"]))
+            except Exception as e:
+                log("manutenzione automatica non ripristinata: %s" % e)
         if j.get("power_prev"):
             _run(["powercfg", "/setactive", j["power_prev"]])
         if j.get("timer"):
@@ -898,6 +1179,11 @@ class Watcher:
                 ifeo_sync(self.cfg)
             except Exception as e:
                 log("sync priorita' Windows: %s" % e)
+            if not self.cfg.get("opts", {}).get("gpu_pref"):
+                try:
+                    gpu_pref_clear()
+                except Exception as e:
+                    log("scheda video preferita: %s" % e)
 
     def _match(self, p, games):
         try:
@@ -990,6 +1276,12 @@ class Watcher:
             if opts.get("bg_priority") or opts.get("vendor_priority"):
                 e.lower_background(opts)
             e.keep_services_stopped()
+            if opts.get("standby_purge"):
+                e.standby_check()
+            if opts.get("maintenance") and e.j and e.j.get("maint_tasks") is not None:
+                k = e.kill_maintenance()  # partiti da altro (raro): chiusi, senza attivita' che li rilanci
+                if k:
+                    e.act("Manutenzione chiusa di nuovo: " + ", ".join(k))
         elif e.active and time.time() - self.last_seen > GRACE:
             e.deactivate()
             self.write_status([], force=True)
@@ -1092,6 +1384,10 @@ def disable():
     _run(["schtasks", "/Delete", "/TN", TASK, "/F"])
     try:
         ifeo_clear()
+    except Exception:
+        pass
+    try:
+        gpu_pref_clear()
     except Exception:
         pass
     for _ in range(20):
@@ -1331,6 +1627,40 @@ def verify():
         t = _timer_now_ms()
         add("Sistema", "Timer di sistema", None if t is None else t <= 0.51,
             "non leggibile" if t is None else "%.3f ms" % t)
+    if opts.get("maintenance") and j.get("maint_tasks") is not None:
+        lst = ",".join("'%s'" % t.replace("'", "''") for t in j["maint_tasks"])
+        code, out = _ps("foreach ($p in @(%s)) { $i = $p.LastIndexOf('\\'); $t = Get-ScheduledTask -TaskPath "
+                        "$p.Substring(0, $i + 1) -TaskName $p.Substring($i + 1) -ErrorAction SilentlyContinue; "
+                        "if ($t) { $t.State.ToString() } }" % lst, timeout=60) if j["maint_tasks"] else (0, "")
+        states = [l.strip() for l in out.splitlines() if l.strip()]
+        sospese = sum(1 for s_ in states if s_ == "Disabled")
+        add("Sistema", "Manutenzione di Windows in pausa", sospese == len(j["maint_tasks"]),
+            "%d attivita' sospese su %d" % (sospese, len(j["maint_tasks"])) if j["maint_tasks"]
+            else "nessuna attivita' da sospendere (erano gia' spente)")
+        running_maint = sorted(n for n in names_running if n in MAINT_PROCS)
+        add("Sistema", "Processi di manutenzione", not running_maint,
+            "nessuno in esecuzione" if not running_maint else "aperti: " + ", ".join(running_maint))
+    if opts.get("eco_bg"):
+        eco = cputopo.eco_decide()
+        if eco.get("apply"):
+            n_eco = sum(1 for rec in (j.get("bg") or {}).values() if len(rec) > 6 and rec[6])
+            add("Sistema", "Modalita' efficienza ai programmi in background", True if n_eco else None,
+                "%d programmi" % n_eco if n_eco else "nessun programma ancora abbassato")
+        else:
+            add("Sistema", "Modalita' efficienza ai programmi in background", None,
+                "non usata su questo processore: basta la priorita' bassa")
+    if opts.get("standby_purge"):
+        free, standby = _memlists()
+        add("Sistema", "Memoria in standby", None if free is None else (free >= 1024 or standby < 1024),
+            "non leggibile" if free is None else "%d MB liberi, %d MB in standby, svuotata %d volte" % (
+                free, standby, j.get("purges", 0)))
+    if opts.get("gpu_pref"):
+        g = gpu_names()
+        mine = _load(GPU_PREF_FILE, {})
+        add("Sistema", "Scheda video ad alte prestazioni", True if len(g) >= 2 and mine else None,
+            "una sola scheda video: non serve" if len(g) < 2 else
+            ("impostata per %d giochi (vale dalla prossima apertura)" % len(mine) if mine
+             else "gia' scelta per questi giochi o nessun gioco ancora visto"))
     if opts.get("power_plan"):
         a = _active_scheme()
         add("Sistema", "Piano Prestazioni elevate", a == "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", a or "non leggibile")

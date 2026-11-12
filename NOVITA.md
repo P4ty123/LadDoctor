@@ -1,3 +1,15 @@
+## LagDoctor 5.16.0
+
+- Ottimizzazioni: nuova categoria "Overlays".
+  - In cima, "Overlay attivi adesso": i programmi che in questo momento si agganciano ai giochi (Steam, NVIDIA,
+    AMD, RivaTuner, Overwolf, EA, Epic, Xbox Game Bar, Medal), con il pulsante Aggiorna.
+  - Sotto, gli overlay dei programmi installati sul PC (Steam, NVIDIA App / GeForce Experience, AMD Software,
+    Intel, Discord, RivaTuner / MSI Afterburner, Overwolf, EA, Ubisoft Connect, GOG Galaxy) con lo stato
+    (acceso, spento, attivo ora, da controllare) e "Come spegnerlo": dove disattivarlo nel programma.
+  - Spostate qui le voci di Windows che riguardano gli overlay: registrazione Xbox Game Bar, Game DVR di sistema,
+    apertura della Game Bar con Win+G / tasto Xbox, MPO (Multiplane Overlay).
+- Il pulsante Ignora ora sta accanto a "dettagli", cosi' i controlli a destra restano su una riga.
+
 ## LagDoctor 5.15.0
 
 - Nuova pagina Ottimizzazioni: categorie a sinistra (con quante voci sono attive e un pallino rosso se c'e' qualcosa

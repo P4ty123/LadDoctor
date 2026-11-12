@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 import psutil
 
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
+from . import overlays
 from . import __version__, pdh, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
@@ -142,7 +143,8 @@ def tweak_json(t, st, applied, sysinfo, ignored=frozenset()):
             "harm_if_off": t.harm_if_off, "group": t.group, "source": t.source,
             "recommended": t.recommended(sysinfo), "status": st.get(t.id), "applied": t.id in applied,
             "needs_path": isinstance(t, tweaks.DefenderExclusionTweak), "doc": tweak_docs.get(t.id),
-            "note": getattr(t, "note", None)}
+            "note": getattr(t, "note", None), "manual": bool(getattr(t, "manual", False)),
+            "how": getattr(t, "how", None), "running": t.running() if hasattr(t, "running") else []}
 
 
 def catalog_json():
@@ -574,6 +576,16 @@ class Handler(BaseHTTPRequestHandler):
             return {"items": game_candidates()}
         if path == "/api/ping":
             return {"ok": True}
+        if path == "/api/overlays":
+            # stato aggiornato degli overlay (dipende dai programmi aperti in questo momento)
+            items = {}
+            for t in tweaks.for_vendor(vendor()):
+                if t.kind == "overlay" or t.cat == overlays.CAT:
+                    st, _dt = _status_of(t)
+                    STATE["statuses"][t.id] = st
+                    items[t.id] = {"status": st, "note": getattr(t, "note", None),
+                                   "running": t.running() if hasattr(t, "running") else []}
+            return {"live": overlays.live(), "items": items}
         if path == "/api/settings":
             return settings.status()
         if path == "/api/update":

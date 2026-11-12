@@ -1205,8 +1205,6 @@ MANUAL_TIPS = [
     ("Accelerazione hardware di Discord", "Discord > Impostazioni > Avanzate > Accelerazione hardware: se senti "
      "stutter con Discord aperto, prova a spegnerla. Nei giochi molto pesanti sulla CPU puo' andare peggio: "
      "verificalo col test prima/dopo.", "Test di utenti (risultati misti)"),
-    ("Overlay (Discord, Steam, NVIDIA, Xbox)", "Ogni overlay si 'aggancia' al gioco. Tieni solo quello che usi "
-     "davvero: Discord > Overlay di gioco, Steam > In gioco, NVIDIA App > Overlay.", "Guide NVIDIA e Discord"),
     ("EXPO / XMP nel BIOS", "Attiva il profilo EXPO/XMP della RAM: con la RAM alla velocita' base gli 1% low "
      "peggiorano molto (LagDoctor lo controlla da solo).", "AMD, Intel"),
     ("Resizable BAR / Smart Access Memory", "Nel BIOS: 'Above 4G Decoding' + 'Re-Size BAR' attivi.", "NVIDIA, AMD"),
@@ -1392,8 +1390,9 @@ BY_ID = {t.id: t for t in CATALOG}
 
 
 def for_vendor(vendor):
-    """Il catalogo senza le voci del driver di altre marche."""
-    return [t for t in CATALOG if not t.vendor or t.vendor == vendor]
+    """Il catalogo senza le voci del driver di altre marche e senza gli overlay di programmi non installati."""
+    return [t for t in CATALOG if (not t.vendor or t.vendor == vendor) and
+            (not hasattr(t, "available") or t.available())]
 
 
 # ================================================================ DEBLOAT, TIMER RESOLUTION, IMPOSTAZIONI, MITI
@@ -1406,6 +1405,11 @@ NOT_TOGGLEABLE = _et.NOT_TOGGLEABLE
 from . import virt_tweak as _vt  # noqa: E402
 
 _vt.register()
+
+# ================================================================ OVERLAY: categoria a parte
+from . import overlays as _ov  # noqa: E402
+
+_ov.register()
 
 # GlobalTimerResolutionRequests e' ora parte di "Timer Resolution 0,5 ms": tolgo la voce separata dall'elenco
 # (resta annullabile se era stata applicata; applicando il Timer Resolution viene sostituita, stesso gruppo).

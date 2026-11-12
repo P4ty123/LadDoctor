@@ -271,7 +271,7 @@ function toFix() {
 }
 function notActive() {
   const fx = new Set(toFix().map((t) => t.id)), groups = new Set(toFix().map((t) => t.group).filter(Boolean));
-  return twsActive().filter((t) => !fx.has(t.id) && !isOn(t) && t.kind !== "fix" && t.kind !== "myth" && !(t.group && groups.has(t.group)));
+  return twsActive().filter((t) => !fx.has(t.id) && !isOn(t) && t.kind !== "fix" && t.kind !== "myth" && !t.manual && !(t.group && groups.has(t.group)));
 }
 function statusBadge(t) {
   if (t.applied) return t.kind === "myth" ? '<span class="badge b-bad">attivata da LagDoctor</span>' : '<span class="badge b-acc">applicata da LagDoctor</span>';
@@ -286,7 +286,8 @@ function statusBadge(t) {
 const riskCls = ["b-ok", "b-acc", "b-warn", "b-bad"];
 const effCls = { alta: "b-ok", media: "b-ok", bassa: "", comfort: "", dubbia: "b-warn", sconsigliata: "b-bad" };
 /* si puo' spuntare solo cio' che non e' gia' attivo */
-const selectable = (t) => !isOn(t) && !t.ignored;
+const selectable = (t) => !isOn(t) && !t.ignored && !t.manual;
+const OV_CAT = "Overlays";
 
 async function tweaksPage() {
   main().innerHTML = '<div class="loading"><div class="spinner"></div><p>Carico le impostazioni...</p></div>';
@@ -297,6 +298,7 @@ async function tweaksPage() {
   }
   if (S.catFilter) { S.twCat = S.catFilter; S.catFilter = null; }
   if (S.twCat === undefined) S.twCat = "";
+  S.ovLoaded = false; S.ovLive = null;
   main().innerHTML = `
     <div class="row opt-head"><div><h1 style="margin-bottom:4px">Ottimizzazioni</h1><p class="sub" id="opt-sub" style="margin:0"></p></div><span class="grow"></span>
       <div class="seg" id="filters">
@@ -358,6 +360,7 @@ function docHtml(t) {
     <div><h4>${myth ? "Cosa fa" : "A cosa serve questa impostazione"}</h4><p>${esc(d.cosa)}</p></div>
     <div><h4 class="ok">${myth ? "Quando potrebbe aiutare" : "Perche' cambiarla"}</h4><p>${esc(d.perche || t.desc)}</p></div>
     <div><h4 class="bad">${myth ? "Perche' e' meglio lasciarla disattivata" : "Possibili problemi"}</h4><p>${esc(d.problemi || "Nessuno noto.")}</p></div>
+    ${t.how ? `<div class="how"><h4>Come spegnerlo</h4><p>${esc(t.how)}</p></div>` : ""}
     ${t.warning ? `<div class="w">Attenzione: ${esc(t.warning)}</div>` : ""}
     <div class="mut src">Efficacia ${esc(t.efficacy)} · rischio ${esc(t.risk_label)}${t.reboot ? " · serve il riavvio" : ""}${t.source ? " · fonte: " + esc(t.source) : ""}</div>
   </div>`;
@@ -388,6 +391,13 @@ function dotsHtml(t) {
   return `<span class="dots" title="${EFF_WORD[t.efficacy] || esc(t.efficacy)}">${[0, 1, 2].map((k) => `<i${k < n ? ' class="f"' : ""}></i>`).join("")}<em>${lab}</em></span>`;
 }
 function stateHtml(t) {
+  if (t.kind === "overlay") {
+    if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
+    if (t.running && t.running.length) return '<span class="badge b-warn" title="in esecuzione adesso">attivo ora</span>';
+    if (t.status === false) return '<span class="badge b-warn">acceso</span>';
+    if (t.status === true) return '<span class="badge b-ok">spento</span>';
+    return '<span class="badge" title="LagDoctor non riesce a leggere questa impostazione">da controllare</span>';
+  }
   if (S.sel.has(t.id)) return '<span class="badge b-acc">da applicare</span>';
   if (t.applied || t.kind === "myth" || t.status === true) return statusBadge(t);
   if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
@@ -397,6 +407,7 @@ function stateHtml(t) {
   return "";
 }
 function switchHtml(t) {
+  if (t.manual) return `<button class="ghost sm how-btn" data-how="${t.id}" title="Si spegne dal programma: ti dico dove">${S.open.has(t.id) ? "Chiudi" : "Come spegnerlo"}</button>`;
   const on = isOn(t) || S.sel.has(t.id);
   let tip = "", dis = false;
   if (t.ignored) { dis = true; tip = "Voce ignorata"; }
@@ -408,8 +419,8 @@ function switchHtml(t) {
 }
 function rowHtml(t) {
   return `<div class="tw2 ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
-    <div class="tx name"><b>${esc(t.name)}</b><div>${esc(t.desc || (t.doc && t.doc.cosa) || "")} <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span></div></div>
-    <div class="right">${actionHtml(t)}<span class="stc">${stateHtml(t)}</span>${dotsHtml(t)}<span class="risk ${RISK_CLS[t.risk] || "m"}">${esc(t.risk_label)}</span>${switchHtml(t)}</div>
+    <div class="tx name"><b>${esc(t.name)}</b><div>${esc(t.desc || (t.doc && t.doc.cosa) || "")} <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span> ${actionHtml(t)}</div></div>
+    <div class="right"><span class="stc">${stateHtml(t)}</span>${dotsHtml(t)}<span class="risk ${RISK_CLS[t.risk] || "m"}">${esc(t.risk_label)}</span>${switchHtml(t)}</div>
     ${S.open.has(t.id) ? docHtml(t) : ""}
   </div>`;
 }
@@ -436,7 +447,7 @@ function renderTweaks() {
       <div class="p"><i style="width:${pct}%"></i></div></div>`;
   };
   $("#cats").innerHTML = catRow("", "Tutte le categorie", act) + order.map((c) => catRow(c, c === MYTH_CAT ? "Non affidabili" : c, act.filter((t) => t.cat === c))).join("");
-  $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { S.twCat = el.dataset.cat; renderTweaks(); }));
+  $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { if (el.dataset.cat === OV_CAT && S.twCat !== OV_CAT) S.ovLoaded = false; S.twCat = el.dataset.cat; renderTweaks(); }));
   /* pannello a destra */
   const list = visible();
   const fname = { fix: "da correggere", all: "", rec: "consigliate", off: "non attive", on: "attive", ign: "ignorate", myth: "non affidabili" }[S.filter] || "";
@@ -447,13 +458,17 @@ function renderTweaks() {
   $("#pan-s").textContent = (allMyth ? `${scope.length} voci · ${scope.filter(isOn).length} attive sul tuo PC` : `${scope.filter((t) => isOn(t) && t.kind !== "myth").length} attive su ${sTot}`) + (fname ? ` · ${list.length} ${fname}` : "") +
     (S.twCat === "Sicurezza" ? " · voci pericolose: chiedono una conferma prima di essere applicate" : "");
   const groups = {};
-  list.slice().sort((a, b) => (b.recommended === true) - (a.recommended === true) || (EFF[a.efficacy] - EFF[b.efficacy]) || a.risk - b.risk)
+  /* overlay: prima quelli che girano adesso, poi accesi, da controllare, spenti; poi le voci di Windows */
+  const ovRank = (t) => t.kind !== "overlay" ? 4 : (t.running && t.running.length) ? 0 : t.status === false ? 1 : t.status == null ? 2 : 3;
+  list.slice().sort((a, b) => (a.cat === OV_CAT && b.cat === OV_CAT ? ovRank(a) - ovRank(b) : 0) ||
+    (b.recommended === true) - (a.recommended === true) || (EFF[a.efficacy] - EFF[b.efficacy]) || a.risk - b.risk)
     .forEach((t) => (groups[t.cat] = groups[t.cat] || []).push(t));
   const ignNote = S.filter === "ign" ? `<div class="myth-note" style="background:rgba(255,255,255,.04);border-color:var(--line2)">Voci che hai deciso di ignorare: non compaiono tra quelle da correggere o consigliate e <b>non contano nel punteggio</b> del PC. Con <b>Non ignorare</b> tornano al loro posto.</div>` : "";
   const mythNote = `<div class="myth-note">Tweak famosi che <b>non funzionano o peggiorano</b> le prestazioni sui PC moderni. Puoi comunque attivarli per provarli (apri i dettagli per sapere cosa fanno, quando potrebbero aiutare e perche' e' meglio lasciarli disattivati). Se uno risulta ATTIVO sul tuo PC, LagDoctor ti propone di disattivarlo.</div>`;
   const myths = () => S.catalog.myths.map((m) => `<div class="tw2"><div class="tx"><b>${esc(m.name)}</b><div>${esc(m.why)}</div></div><div class="right"><span class="badge">non attivabile</span></div></div>`).join("");
   const multi = !S.twCat;
-  $("#tw-list").innerHTML = ignNote + (list.length ? order.filter((c) => groups[c]).map((c) => `
+  const ovBox = S.twCat === OV_CAT ? overlayBox() : "";
+  $("#tw-list").innerHTML = ovBox + ignNote + (list.length ? order.filter((c) => groups[c]).map((c) => `
     <div class="tw-group">${multi ? `<h3>${esc(c === MYTH_CAT ? "Non affidabili" : c)}</h3>` : ""}
     ${c === MYTH_CAT ? mythNote : ""}
     ${groups[c].map(rowHtml).join("")}
@@ -472,13 +487,34 @@ function renderTweaks() {
     e.target.checked ? S.sel.add(id) : S.sel.delete(id);
     renderTweaks();
   }));
+  $$("[data-how]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); const id = b.dataset.how; S.open.has(id) ? S.open.delete(id) : S.open.add(id); renderTweaks(); }));
   $$("[data-undo]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); revertIds([b.dataset.undo]); }));
   $$("[data-off]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); forceOff(b.dataset.off); }));
   $$("[data-ign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.ign, true); }));
   $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
+  if (S.twCat === OV_CAT) { const rb = $("#ov-refresh"); if (rb) rb.onclick = () => loadOverlays(true); if (!S.ovLoaded) loadOverlays(false); }
   const n = S.sel.size;
   $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : "Accendi l'interruttore delle voci che vuoi e premi Applica. Clicca sul nome di una voce per leggere cosa fa.";
   $("#apply-btn").disabled = !n;
+}
+/* overlay: cosa gira adesso (si aggiorna ogni volta che apri la categoria) */
+function overlayBox() {
+  const live = S.ovLive;
+  const body = live == null ? '<span class="mut">Controllo i programmi aperti...</span>'
+    : live.length ? live.map((o) => `<span class="badge b-warn" title="${esc(o.process)}">${esc(o.name)}</span>`).join(" ")
+    : '<span class="badge b-ok">nessun overlay in esecuzione</span>';
+  return `<div class="ov-live"><div><b>Overlay attivi adesso</b><div class="mut" style="font-size:12.5px;margin-top:2px">Programmi che in questo momento si agganciano ai giochi. Sotto trovi tutti gli overlay installati e dove spegnerli.</div></div>
+    <div class="ov-chips">${body}</div><button class="ghost sm" id="ov-refresh">Aggiorna</button></div>`;
+}
+async function loadOverlays(manual) {
+  S.ovLoaded = true;
+  try {
+    const r = await api("/api/overlays");
+    S.ovLive = r.live || [];
+    tws().forEach((t) => { const x = r.items && r.items[t.id]; if (x) { t.status = x.status; t.note = x.note; t.running = x.running; } });
+    if (manual) toast(S.ovLive.length ? `${S.ovLive.length} overlay in esecuzione` : "Nessun overlay in esecuzione");
+  } catch (e) { S.ovLive = []; if (manual) toast("Errore: " + e.message); }
+  if (S.page === "tweaks") renderTweaks();
 }
 async function forceOff(id) {
   try {

@@ -1,3 +1,7 @@
+## LagDoctor 5.19.2
+
+- Game mode, elenco dei giochi: righe piu' basse e senza il percorso della cartella sotto ogni gioco.
+
 ## LagDoctor 5.19.1
 
 - Game mode, "Cosa fa durante il gioco": ogni voce mostra solo il nome; spiegazione, possibili problemi e cosa ha

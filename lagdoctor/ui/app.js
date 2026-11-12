@@ -715,10 +715,10 @@ async function gamemodePage(scanAgain) {
       <button class="ghost" id="gm-scan">Cerca di nuovo i giochi</button>
       <button class="ghost" id="gm-add">Aggiungi un gioco</button>
     </div>
-    ${c.games.length ? c.games.map((g) => `<div class="list-row">
+    ${c.games.length ? c.games.map((g) => `<div class="list-row gm-game">
       <label class="switch"><input type="checkbox" data-on="${esc(g.id)}" ${g.on ? "checked" : ""}><span></span></label>
       <div class="grow"><b>${esc(g.name)}</b> <span class="badge">${esc(GM_SRC[g.source] || g.source)}</span>${g.anticheat ? ` <span class="badge b-warn" title="Il processo del gioco e' protetto: LagDoctor non lo tocca. La priorita' la da' Windows stesso all'avvio del gioco (dalla seconda apertura); niente affinita' dei core.">anti-cheat: ${esc(g.anticheat)} &middot; metodo sicuro</span>` : ""}
-        <div class="mut" style="font-size:12px;word-break:break-all">${esc(where(g))}</div></div>
+</div>
       <span class="mut" style="font-size:12px">Priorita'</span> ${prioSel(g)}
       <button class="ghost" data-rm="${esc(g.id)}" title="Togli dall'elenco">&times;</button>
     </div>`).join("") : '<div class="empty">Nessun gioco trovato. Usa "Aggiungi un gioco" mentre il gioco e\' aperto.</div>'}

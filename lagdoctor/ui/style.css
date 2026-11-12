@@ -293,3 +293,8 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .gm-opt-head{display:flex;align-items:center;gap:10px}
 .gm-opt-head button{flex:none;font-size:12px;padding:4px 10px}
 .gm-opt-doc{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+/* Game mode: righe dei giochi compatte */
+.gm-game{padding:6px 12px;margin-bottom:4px;gap:10px}
+.gm-game b{font-size:13.5px}
+.gm-game select{padding:4px 8px;font-size:13px}
+.gm-game button{padding:2px 9px}

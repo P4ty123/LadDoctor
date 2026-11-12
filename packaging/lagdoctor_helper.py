@@ -46,6 +46,9 @@ def main():
             tweaks.init(paths.DATA_DIR)
             for m in tweaks.revert_all():
                 print(m)
+            from lagdoctor import autostart
+            for m in autostart.restore_all():
+                print(m)
             print(fixes.undo_all(paths.data("backup_impostazioni.json")))
         # il Timer Resolution parte da LagDoctor.exe: senza programma non funzionerebbe piu', quindi lo annullo
         from lagdoctor import extra_tweaks, paths
@@ -63,7 +66,7 @@ def main():
         from lagdoctor import paths
         for m in ("server", "gamemode", "capture", "stutter", "analysis", "tweaks", "extra_tweaks", "driver_tweaks",
                   "gpu_driver", "scan", "checks", "updater", "cputopo", "games", "virt_tweak", "tray", "settings",
-                  "overlays"):
+                  "overlays", "autostart"):
             importlib.import_module("lagdoctor." + m)
         from lagdoctor import server, capture, __version__
         need = [os.path.join(server.UI_DIR, f) for f in ("index.html", "app.js", "style.css")]

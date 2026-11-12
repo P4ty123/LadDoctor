@@ -661,21 +661,78 @@ async function driver() {
 
 /* ------------------------------------------------------------------ AVVIO AUTOMATICO */
 async function startup() {
+  S.stTab = S.stTab || "prog";
+  main().innerHTML = `<h1>Avvio automatico</h1><p class="sub">Cosa parte con Windows e resta in background mentre giochi.</p>
+    <div class="tabs2"><a data-st="prog" class="${S.stTab === "prog" ? "on" : ""}">Programmi<small id="st-n-prog"></small></a>
+      <a data-st="proc" class="${S.stTab === "proc" ? "on" : ""}">Processi in background<small id="st-n-proc"></small></a></div>
+    <div id="st-body"><div class="loading"><div class="spinner"></div><p>Leggo cosa parte con Windows...</p></div></div>`;
+  $$("[data-st]").forEach((a) => a.onclick = () => { S.stTab = a.dataset.st; startup(); });
+  if (S.stTab === "prog") return startupPrograms();
+  return startupProcesses();
+}
+const runTxt = (it) => it.running ? `<b>in esecuzione</b>${it.mb ? " · " + it.mb + " MB" : ""}` : "fermo";
+async function startupPrograms() {
   const r = await api("/api/startup");
   const bad = new Set(r.bad);
-  const exe = (cmd) => base((cmd.startsWith('"') ? cmd.split('"')[1] : cmd.split(" ")[0]) || "");
-  main().innerHTML = `<h1>Avvio automatico</h1><p class="sub">Programmi che partono con Windows e restano in background mentre giochi. Disattivarli non li disinstalla: si riattivano qui o da Gestione attivita'.</p>
-    ${r.items.length ? r.items.map((it, i) => {
-      const e = exe(it.cmd), isBad = bad.has(e.toLowerCase()), sec = /securityhealth/i.test(it.name);
-      return `<div class="list-row"><label class="switch"><input type="checkbox" data-i="${i}" ${it.enabled ? "checked" : ""}><span></span></label>
-        <div class="grow"><b>${esc(it.name)}</b> ${isBad ? '<span class="badge b-warn">noto per causare scatti</span>' : ""}${sec ? '<span class="badge b-ok">sicurezza di Windows: lascialo attivo</span>' : ""}<div class="mut" style="font-size:12px;word-break:break-all">${esc(it.cmd)}</div></div>
-        <span class="badge">${it.hive === "HKCU" ? "solo tuo utente" : "tutti gli utenti"}</span></div>`;
-    }).join("") : '<div class="empty">Nessun programma all\'avvio trovato.</div>'}`;
-  $$("[data-i]").forEach((c) => c.addEventListener("change", async () => {
-    const it = r.items[c.dataset.i];
-    try { await api("/api/startup", { hive: it.hive, name: it.name, enabled: c.checked }); toast((c.checked ? "Attivato: " : "Disattivato: ") + it.name); }
-    catch (e) { toast("Errore: " + e.message); c.checked = !c.checked; }
-  }));
+  $("#st-n-prog").textContent = r.items.length;
+  $("#st-body").innerHTML = `<div class="tools"><input type="search" id="st-q" placeholder="Cerca..." style="width:220px"><span class="grow"></span><span class="mut" style="font-size:12px">Interruttore acceso = parte con Windows</span></div>
+    <div id="st-list"></div>`;
+  const draw = () => {
+    const q = ($("#st-q").value || "").toLowerCase();
+    const list = r.items.map((it, i) => [it, i]).filter(([it]) => !q || (it.name + " " + it.cmd).toLowerCase().includes(q));
+    $("#st-list").innerHTML = list.length ? list.map(([it, i]) => {
+      const isBad = bad.has((it.exe || "").toLowerCase()), sec = /securityhealth/i.test(it.name);
+      return `<div class="pr"><label class="switch"><input type="checkbox" data-i="${i}" ${it.enabled ? "checked" : ""}><span></span></label>
+        <div class="tx"><b>${esc(it.name)}</b> ${isBad ? '<span class="badge b-warn">noto per causare scatti</span>' : ""}${sec ? '<span class="badge b-ok">sicurezza: lascialo attivo</span>' : ""}<div class="sub2" title="${esc(it.cmd)}">${esc(it.exe || "")}</div></div>
+        <div class="meta"><span class="src">${it.hive === "HKCU" ? "solo il tuo utente" : "tutti gli utenti"}</span></div><div class="run">${runTxt(it)}</div></div>`;
+    }).join("") : '<div class="empty">Nessun programma all\'avvio trovato.</div>';
+    $$("#st-list [data-i]").forEach((c) => c.addEventListener("change", async () => {
+      const it = r.items[c.dataset.i];
+      try { await api("/api/startup", { hive: it.hive, name: it.name, enabled: c.checked }); it.enabled = c.checked; toast((c.checked ? "Attivato: " : "Disattivato: ") + it.name); }
+      catch (e) { toast("Errore: " + e.message); c.checked = !c.checked; }
+    }));
+  };
+  $("#st-q").addEventListener("input", draw);
+  draw();
+}
+async function startupProcesses() {
+  let r;
+  try { r = await api("/api/autostart" + (S.stAll ? "?all=1" : "")); }
+  catch (e) { $("#st-body").innerHTML = `<div class="empty">Errore: ${esc(e.message)}</div>`; return; }
+  $("#st-n-proc").textContent = r.items.filter((x) => x.group !== "win").length;
+  $("#st-body").innerHTML = `<div class="note"><b>Servizi e attivita' pianificate</b> che non si vedono in Gestione attivita' &gt; Avvio. Spegnendo l'interruttore LagDoctor <b>toglie l'avvio automatico</b> (servizio Disattivato, attivita' disattivata): se e' aperto viene fermato <b>una volta sola</b> e non ripartira', senza chiusure continue. Riaccendi l'interruttore per rimettere tutto com'era (anche con "Ripristina tutto").</div>
+    <div class="tools"><input type="search" id="st-q" placeholder="Cerca..." style="width:220px"><label class="chk"><input type="checkbox" id="st-all" ${S.stAll ? "checked" : ""}> Mostra anche i componenti di Windows</label>
+      <span class="grow"></span><span class="mut" style="font-size:12px">Interruttore acceso = parte con Windows</span></div>
+    ${r.error && !r.items.length ? `<div class="empty">Non riesco a leggere servizi e attivita': ${esc(r.error)}</div>` : ""}
+    <div id="st-list"></div>`;
+  const draw = () => {
+    const q = ($("#st-q").value || "").toLowerCase();
+    const list = r.items.filter((it) => !q || (it.name + " " + it.exe + " " + it.company).toLowerCase().includes(q));
+    $("#st-list").innerHTML = r.groups.map((g) => {
+      const rows = list.filter((it) => it.group === g.id);
+      if (!rows.length) return "";
+      return `<div class="grp">${esc(g.name)}</div>` + rows.map((it) => {
+        const i = r.items.indexOf(it);
+        const badges = it.badges.map((b) => b.startsWith("!") ? `<span class="badge b-warn">${esc(b.slice(1))}</span>` : b === "si puo' disattivare" ? `<span class="badge b-acc">${esc(b)}</span>` : `<span class="badge">${esc(b)}</span>`).join(" ");
+        const lock = it.lock ? `<span class="badge b-ok">${esc(it.lock)}</span>` : "";
+        return `<div class="pr"><label class="switch" title="${it.lock ? esc(it.lock) : it.on ? "Spegni per non farlo partire con Windows" : "Accendi per rimetterlo com'era"}"><input type="checkbox" data-p="${i}" ${it.on ? "checked" : ""} ${it.lock ? "disabled" : ""}><span></span></label>
+          <div class="tx"><b>${esc(it.name)}</b> ${lock}${badges}<div class="sub2" title="${esc(it.desc || it.path)}">${esc(it.exe || "")}${it.company ? " · " + esc(it.company) : ""}</div></div>
+          <div class="meta"><span class="src">${esc(it.origin)}</span></div><div class="run">${runTxt(it)}</div></div>`;
+      }).join("");
+    }).join("") || '<div class="empty">Nessun servizio o attivita\' trovato.</div>';
+    $$("#st-list [data-p]").forEach((c) => c.addEventListener("change", async () => {
+      const it = r.items[c.dataset.p];
+      c.disabled = true;
+      try {
+        const x = await api("/api/autostart", { kind: it.kind, id: it.id, enabled: c.checked });
+        toast(it.name + ": " + x.msg, 4500);
+        startupProcesses();
+      } catch (e) { toast("Errore: " + e.message, 6000); c.checked = !c.checked; c.disabled = false; }
+    }));
+  };
+  $("#st-q").addEventListener("input", draw);
+  $("#st-all").onchange = (e) => { S.stAll = e.target.checked; $("#st-list").innerHTML = '<div class="loading"><div class="spinner"></div></div>'; startupProcesses(); };
+  draw();
 }
 
 /* ------------------------------------------------------------------ GAME MODE */

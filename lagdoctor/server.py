@@ -20,6 +20,7 @@ import psutil
 
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
 from . import overlays
+from . import autostart
 from . import __version__, pdh, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
@@ -408,8 +409,31 @@ def job_revert(job, ids):
     return {"results": results}
 
 
+def _startup_running(items):
+    """Programmi all'avvio: aggiunge se sono aperti adesso e quanta RAM usano."""
+    by_name = {}
+    for p in psutil.process_iter(["name", "memory_info"]):
+        try:
+            n = (p.info["name"] or "").lower()
+            by_name[n] = by_name.get(n, 0) + (p.info["memory_info"].rss if p.info["memory_info"] else 0) / 2**20
+        except Exception:
+            continue
+    for it in items:
+        cmd = it.get("cmd") or ""
+        exe = (cmd.split('"')[1] if cmd.startswith('"') and cmd.count('"') >= 2 else cmd.split(" ")[0])
+        n = os.path.basename(exe.replace("/", "\\").split("\\")[-1]).lower()
+        it["exe"] = os.path.basename(exe.split("\\")[-1]) or it.get("name")
+        it["running"] = n in by_name
+        it["mb"] = round(by_name.get(n, 0))
+    return items
+
+
 def job_restore_all(job):
     msgs = tweaks.revert_all()
+    try:
+        msgs += autostart.restore_all()
+    except Exception as e:
+        msgs.append("Processi all'avvio: ERRORE %s" % e)
     msgs.append(fixes.undo_all(BACKUP))
     sessions.end_experiment()
     for m in msgs:
@@ -576,8 +600,10 @@ class Handler(BaseHTTPRequestHandler):
             return job.as_dict() if job else {"status": "missing"}
         if path == "/api/catalog":
             return catalog_json()
+        if path == "/api/autostart":
+            return autostart.list_items(include_windows=qs.get("all", ["0"])[0] == "1")
         if path == "/api/startup":
-            return {"items": tweaks.startup_items(),
+            return {"items": _startup_running(tweaks.startup_items()),
                     "bad": sorted(k.lower() for k, v in checks.KNOWN_BAD.items() if v)}
         if path == "/api/driver":
             return driver_report(fresh=True)
@@ -676,6 +702,11 @@ class Handler(BaseHTTPRequestHandler):
             if job:
                 job.stop.set()
             return 200, {"ok": True}
+        elif path == "/api/autostart":
+            try:
+                return 200, {"ok": True, "msg": autostart.set_enabled(b.get("kind"), b.get("id", ""), bool(b.get("enabled")))}
+            except Exception as e:
+                return 400, {"error": str(e)}
         elif path == "/api/startup":
             item = next((i for i in tweaks.startup_items() if i["hive"] == b.get("hive") and i["name"] == b.get("name")), None)
             if not item:

@@ -1,3 +1,14 @@
+## LagDoctor 5.20.0
+
+- Avvio automatico, nuova scheda "Processi in background": servizi e attivita' pianificate che partono con Windows
+  e che Gestione attivita' non mostra, divisi in aggiornamenti automatici, programmi del produttore, giochi e
+  launcher, driver e hardware, altri programmi. Per ognuno: da dove parte, se e' in esecuzione e quanta RAM usa.
+  - Spegnendo l'interruttore LagDoctor toglie l'avvio alla fonte (servizio Disattivato, attivita' disattivata) e lo
+    ferma una volta: non si riapre, niente chiusure continue. Riaccendendolo (o con Ripristina tutto) torna com'era.
+  - Driver, antivirus e anti-cheat hanno l'interruttore bloccato; i componenti di Windows sono nascosti (si possono
+    vedere, in sola lettura, con "Mostra anche i componenti di Windows").
+- Scheda "Programmi": righe piu' compatte con stato (in esecuzione / fermo) e RAM usata.
+
 ## LagDoctor 5.19.2
 
 - Game mode, elenco dei giochi: righe piu' basse e senza il percorso della cartella sotto ogni gioco.

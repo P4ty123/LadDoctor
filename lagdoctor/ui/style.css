@@ -298,3 +298,22 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .gm-game b{font-size:13.5px}
 .gm-game select{padding:4px 8px;font-size:13px}
 .gm-game button{padding:2px 9px}
+
+/* Avvio automatico: schede Programmi / Processi in background */
+.tabs2{display:flex;gap:6px;margin:4px 0 16px;flex-wrap:wrap}
+.tabs2 a{padding:9px 16px;border-radius:10px;border:1px solid var(--line);color:var(--mut);font-weight:600;font-size:14px;cursor:pointer;user-select:none}
+.tabs2 a:hover{color:var(--fg)}
+.tabs2 a.on{background:var(--grad);color:#fff;border-color:transparent}
+.tabs2 a small{opacity:.8;font-weight:700;margin-left:6px}
+.tools{display:flex;gap:10px;align-items:center;margin:0 0 10px;flex-wrap:wrap}
+.tools label.chk{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--mut);cursor:pointer}
+.pr{display:flex;align-items:center;gap:14px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pr .tx{flex:1 1 260px;min-width:0}.pr .tx b{font-weight:600}
+.pr .tx .badge{margin-left:4px}
+.pr .tx .sub2{color:var(--mut);font-size:12px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr .meta{display:flex;gap:6px;align-items:center;flex:none;margin-left:auto}
+.pr .run{font-size:12px;color:var(--mut);min-width:118px;text-align:right}
+.pr .run b{color:var(--ok);font-weight:700}
+.src{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,.07);color:var(--mut)}
+.note{font-size:13px;background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.25);border-radius:12px;padding:10px 14px;margin:0 0 14px;color:var(--fg)}
+.grp{font-size:11.5px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mut);margin:18px 0 4px}

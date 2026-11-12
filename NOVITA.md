@@ -1,3 +1,8 @@
+## LagDoctor 5.20.3
+
+- Timer Resolution: la voce risulta attiva solo se il timer e' davvero a 0,5 ms (prima bastava che esistesse
+  l'attivita' all'avvio, anche se il processo si era chiuso con un errore).
+
 ## LagDoctor 5.20.2
 
 - Corretto l'errore "partially initialized module lagdoctor.extra_tweaks" all'accesso a Windows: il processo

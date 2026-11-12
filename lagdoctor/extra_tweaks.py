@@ -196,8 +196,11 @@ class TimerResTweak(Tweak):
         ours = code == 0
         cur = timer_now_ms()
         self.note = None
-        if glob == 1 and ours:
+        if glob == 1 and ours and (cur is None or cur <= 0.55):
             return True
+        if glob == 1 and ours:  # attivita' presente ma il processo non tiene il timer (es. si e' chiuso con un errore)
+            self.note = "attivita' presente ma il timer e' a %.2f ms: riavvia il PC o riapplica la voce" % cur
+            return False
         if glob == 1 and cur is not None and cur <= 0.55:
             self.note = "attivo: timer a %.2f ms tenuto da un altro programma" % cur
             return True

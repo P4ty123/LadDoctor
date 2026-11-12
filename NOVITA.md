@@ -1,3 +1,9 @@
+## LagDoctor 5.20.5
+
+- Game mode, "Chiudi Esplora risorse": Windows lo riapriva da solo dopo pochi secondi. Ora durante il gioco viene
+  sospeso il riavvio automatico di Esplora risorse (AutoRestartShell) e alla fine della partita tutto viene rimesso
+  com'era e Esplora risorse riaperto, anche dopo un crash o uno spegnimento.
+
 ## LagDoctor 5.20.4
 
 - Icona vicino all'orologio: sui PC lenti o appena accesi (es. mini PC) l'area di notifica puo' rispondere in

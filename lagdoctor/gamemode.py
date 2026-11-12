@@ -130,7 +130,9 @@ OPTIONS = [
      "Nessuno. Se avevi gia' scelto una scheda per quel gioco, la tua scelta resta."),
     ("close_shell", False, "Chiudi Esplora risorse (modalita' Xbox completa)",
      "Come la modalita' Xbox: chiude Esplora risorse, barra delle applicazioni, Start e ricerca mentre giochi "
-     "(circa 150-400 MB di RAM e qualche processo in meno). Vengono riaperti quando chiudi il gioco.",
+     "(circa 150-400 MB di RAM e qualche processo in meno). Per evitare che Windows lo riapra da solo, durante il "
+     "gioco viene sospeso anche il suo riavvio automatico. Tutto viene riaperto e rimesso com'era quando chiudi il "
+     "gioco (anche dopo un crash o uno spegnimento, al riavvio).",
      "Niente barra delle applicazioni e notifiche durante il gioco. Alt+Tab e Ctrl+Shift+Esc funzionano."),
 ]
 DEFAULT_OPTS = {k: v for k, v, *_ in OPTIONS}
@@ -171,6 +173,31 @@ MAINT_TASKS = [
 # processi lanciati da quelle attivita': chiusi una volta se erano gia' partiti (con le attivita' sospese non ripartono)
 MAINT_PROCS = {"compattelrunner.exe", "devicecensus.exe", "officec2rclient.exe", "dfrgui.exe", "defrag.exe",
                "winsat.exe", "dmclient.exe"}
+WINLOGON_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+
+
+def _autorestart_shell(value=None, restore=None):
+    """AutoRestartShell di Windows: se e' 1, Windows riapre Esplora risorse pochi secondi dopo che e' stato chiuso.
+    value=0 lo spegne e restituisce il valore di prima ("assente" se non c'era); restore=... lo rimette."""
+    import winreg as w
+    with w.CreateKeyEx(w.HKEY_LOCAL_MACHINE, WINLOGON_KEY, 0, w.KEY_READ | w.KEY_WRITE | w.KEY_WOW64_64KEY) as k:
+        if restore is not None:
+            if restore == "assente":
+                try:
+                    w.DeleteValue(k, "AutoRestartShell")
+                except OSError:
+                    pass
+            else:
+                w.SetValueEx(k, "AutoRestartShell", 0, w.REG_DWORD, int(restore))
+            return restore
+        try:
+            prev = w.QueryValueEx(k, "AutoRestartShell")[0]
+        except OSError:
+            prev = "assente"
+        w.SetValueEx(k, "AutoRestartShell", 0, w.REG_DWORD, int(value))
+        return prev
+
+
 MAINT_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance"
 GPU_PREF_FILE = os.path.join(ROOT, "gamemode_gpu_preferita.json")  # giochi a cui LagDoctor ha dato la GPU dedicata
 GPU_PREF_KEY = r"Software\Microsoft\DirectX\UserGpuPreferences"
@@ -868,6 +895,11 @@ class Engine:
                     restart.append(p.info["exe"])
                 if n == "explorer.exe":
                     self.j["explorer"] = True
+                    if self.j.get("shell_restart_prev") is None:
+                        try:  # altrimenti Windows lo riapre da solo dopo pochi secondi
+                            self.j["shell_restart_prev"] = _autorestart_shell(0)
+                        except Exception as e:
+                            log("AutoRestartShell non modificato: %s" % e)
                     self._jsave()  # prima di chiudere: se qualcosa va storto all'avvio dopo lo riapro
                 p.kill()
                 closed.append(p.info["name"])
@@ -1125,6 +1157,11 @@ class Engine:
         if j.get("services"):
             lst = ",".join("'%s'" % n for n in j["services"])
             _ps("foreach ($n in @(%s)) { Start-Service -Name $n -ErrorAction SilentlyContinue }" % lst, timeout=180)
+        if j.get("shell_restart_prev") is not None:  # prima di riaprire Esplora risorse rimetto il riavvio automatico
+            try:
+                _autorestart_shell(restore=j["shell_restart_prev"])
+            except Exception as e:
+                log("AutoRestartShell non ripristinato: %s" % e)
         if j.get("explorer") and not any((p.info["name"] or "").lower() == "explorer.exe"
                                          for p in psutil.process_iter(["name"])):
             launch_as_user(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "explorer.exe"))

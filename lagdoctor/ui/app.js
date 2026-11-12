@@ -364,7 +364,7 @@ function docHtml(t) {
     <div><h4 class="bad">${myth ? "Perche' e' meglio lasciarla disattivata" : "Possibili problemi"}</h4><p>${esc(d.problemi || "Nessuno noto.")}</p></div>
     ${t.how_ld ? `<div class="how"><h4>Se lo spegni da LagDoctor</h4><p>${esc(t.how_ld)}</p></div>` : ""}
     ${t.how ? `<div class="how"><h4>${t.manual ? "Come spegnerlo" : "Oppure dal programma"}</h4><p>${esc(t.how)}</p></div>` : ""}
-    ${t.warning ? `<div class="w">Attenzione: ${esc(t.warning)}</div>` : ""}
+    ${t.warning && t.cat !== OV_CAT ? `<div class="w">Attenzione: ${esc(t.warning)}</div>` : ""}
     <div class="mut src">Efficacia ${esc(t.efficacy)} · rischio ${esc(t.risk_label)}${t.reboot ? " · serve il riavvio" : ""}${t.source ? " · fonte: " + esc(t.source) : ""}</div>
   </div>`;
 }

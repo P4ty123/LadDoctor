@@ -1,3 +1,7 @@
+## LagDoctor 5.17.2
+
+- Overlays: tolta dai dettagli la riga arancione "Attenzione: ...", che ripeteva "Possibili problemi".
+
 ## LagDoctor 5.17.1
 
 - Overlays: sotto il nome di ogni voce resta solo "dettagli"; la descrizione breve e' stata spostata in cima ai dettagli.

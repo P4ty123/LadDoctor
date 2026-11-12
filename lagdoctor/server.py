@@ -144,7 +144,8 @@ def tweak_json(t, st, applied, sysinfo, ignored=frozenset()):
             "recommended": t.recommended(sysinfo), "status": st.get(t.id), "applied": t.id in applied,
             "needs_path": isinstance(t, tweaks.DefenderExclusionTweak), "doc": tweak_docs.get(t.id),
             "note": getattr(t, "note", None), "manual": bool(getattr(t, "manual", False)),
-            "how": getattr(t, "how", None), "running": t.running() if hasattr(t, "running") else []}
+            "how": getattr(t, "how", None), "how_ld": getattr(t, "how_ld", None),
+            "closes": getattr(t, "closes", None), "running": t.running() if hasattr(t, "running") else []}
 
 
 def catalog_json():

@@ -498,6 +498,18 @@ def _cpus_text(cpus):
     return ", ".join(out)
 
 
+def _blocked_overlays():
+    """Processi degli overlay spenti da LagDoctor: se si sono riaperti la Game mode li richiude.
+    (Stessa lettura di overlays.blocked_processes, qui senza importare il catalogo delle ottimizzazioni.)"""
+    try:
+        with open(paths.data("modifiche_applicate.json"), encoding="utf-8") as f:
+            st = json.load(f)
+        return {p.lower() for k, v in st.items() if k.startswith("ov_") and isinstance(v, dict)
+                for p in ((v.get("backup") or {}).get("block") or [])}
+    except (OSError, ValueError, AttributeError, TypeError):
+        return set()
+
+
 def _protected(name):
     n = (name or "").lower()
     return n in PROTECT or n.startswith(PROTECT_PREFIX)
@@ -589,6 +601,7 @@ class Engine:
             targets.add("onedrive.exe")
         if opts.get("close_shell"):
             targets.update(SHELL)
+        targets.update(_blocked_overlays())  # overlay spenti da LagDoctor (Ottimizzazioni > Overlays)
         if not targets:
             return
         closed, restart = [], []

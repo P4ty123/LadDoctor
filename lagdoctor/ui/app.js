@@ -360,7 +360,8 @@ function docHtml(t) {
     <div><h4>${myth ? "Cosa fa" : "A cosa serve questa impostazione"}</h4><p>${esc(d.cosa)}</p></div>
     <div><h4 class="ok">${myth ? "Quando potrebbe aiutare" : "Perche' cambiarla"}</h4><p>${esc(d.perche || t.desc)}</p></div>
     <div><h4 class="bad">${myth ? "Perche' e' meglio lasciarla disattivata" : "Possibili problemi"}</h4><p>${esc(d.problemi || "Nessuno noto.")}</p></div>
-    ${t.how ? `<div class="how"><h4>Come spegnerlo</h4><p>${esc(t.how)}</p></div>` : ""}
+    ${t.how_ld ? `<div class="how"><h4>Se lo spegni da LagDoctor</h4><p>${esc(t.how_ld)}</p></div>` : ""}
+    ${t.how ? `<div class="how"><h4>${t.manual ? "Come spegnerlo" : "Oppure dal programma"}</h4><p>${esc(t.how)}</p></div>` : ""}
     ${t.warning ? `<div class="w">Attenzione: ${esc(t.warning)}</div>` : ""}
     <div class="mut src">Efficacia ${esc(t.efficacy)} · rischio ${esc(t.risk_label)}${t.reboot ? " · serve il riavvio" : ""}${t.source ? " · fonte: " + esc(t.source) : ""}</div>
   </div>`;
@@ -392,6 +393,7 @@ function dotsHtml(t) {
 }
 function stateHtml(t) {
   if (t.kind === "overlay") {
+    if (S.sel.has(t.id)) return '<span class="badge b-acc">da spegnere</span>';
     if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
     if (t.running && t.running.length) return '<span class="badge b-warn" title="in esecuzione adesso">attivo ora</span>';
     if (t.status === false) return '<span class="badge b-warn">acceso</span>';
@@ -414,6 +416,7 @@ function switchHtml(t) {
   else if (t.applied) tip = t.kind === "myth" ? "Disattiva" : "Annulla la modifica di LagDoctor";
   else if (t.kind === "myth" && t.status === true) tip = "Disattiva";
   else if (isOn(t)) { dis = true; tip = "Gia' attiva (impostata da Windows o da un altro programma)"; }
+  else if (t.kind === "overlay") tip = S.sel.has(t.id) ? "Verra' spento quando premi Applica" : "Accendi per spegnere questo overlay (poi premi Applica)";
   else tip = S.sel.has(t.id) ? "Selezionata: premi Applica in basso" : "Seleziona per applicarla";
   return `<label class="switch${S.sel.has(t.id) ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
 }
@@ -537,6 +540,7 @@ async function applySelected(ids, after) {
     <h2>Applico ${sel.length} modifiche</h2>
     <p class="mut">Prima creo un punto di ripristino di Windows. Ogni modifica si potra' annullare.</p>
     <ul>${sel.map((t) => `<li>${esc(t.name)} <span class="badge ${riskCls[t.risk]}">${t.risk_label}</span></li>`).join("")}</ul>
+    ${sel.some((t) => t.closes) ? `<div class="banner"><b>Programmi che verranno chiusi</b><p>Per cambiare l'impostazione dell'overlay LagDoctor chiude: <b>${[...new Set(sel.filter((t) => t.closes).map((t) => t.closes))].join(", ")}</b>. Se stai giocando o scaricando, finisci prima. Poi riaprili quando vuoi: l'overlay resta spento.</p></div>` : ""}
     ${dup.length ? `<p class="mut">Alternative tra loro: applico solo la prima di: ${dup.map((g) => g.map((t) => esc(t.name)).join(" / ")).join("; ")}</p>` : ""}
     ${needsPath ? `<p><b>Cartella dei giochi da escludere da Defender</b><br><input type="text" id="def-path" style="width:100%" value="${esc(lastDir)}" placeholder="es. D:\\SteamLibrary"></p>` : ""}
     ${risky.length ? `<div class="banner"><b>Modifiche rischiose o pericolose</b>${risky.map((t) => `<p><b>${esc(t.name)}</b>: ${esc(t.warning || "")}</p>`).join("")}

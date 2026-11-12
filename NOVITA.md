@@ -1,3 +1,13 @@
+## LagDoctor 5.17.0
+
+- Overlays: ora si spengono anche da LagDoctor, con l'interruttore e Applica (ogni modifica si annulla):
+  - Steam, app EA, Ubisoft Connect: LagDoctor chiude il programma e spegne l'overlay nelle sue impostazioni
+    (prima di applicare ti dice quali programmi verranno chiusi).
+  - NVIDIA, AMD Software, RivaTuner, Overwolf: LagDoctor chiude l'overlay, ne toglie l'avvio con Windows
+    (RivaTuner, Overwolf) e la Game mode lo richiude a ogni partita se si e' riaperto.
+  - Discord, Intel e GOG Galaxy non hanno un'impostazione modificabile dall'esterno: resta "Come spegnerlo".
+- Overlay dell'app EA: lo stato ora viene letto dalle sue impostazioni.
+
 ## LagDoctor 5.16.0
 
 - Ottimizzazioni: nuova categoria "Overlays".

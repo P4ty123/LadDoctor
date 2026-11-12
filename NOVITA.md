@@ -1,3 +1,9 @@
+## LagDoctor 5.20.1
+
+- Avvio automatico > Processi in background: corretta la lettura (prima risultava vuota). I servizi ora vengono
+  letti direttamente da Windows senza PowerShell; le attivita' pianificate con uno script su file. Spegnere e
+  riattivare usa sc e schtasks. Se una delle due letture non riesce, l'altra viene mostrata lo stesso con il motivo.
+
 ## LagDoctor 5.20.0
 
 - Avvio automatico, nuova scheda "Processi in background": servizi e attivita' pianificate che partono con Windows

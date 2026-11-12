@@ -703,7 +703,7 @@ async function startupProcesses() {
   $("#st-body").innerHTML = `<div class="note"><b>Servizi e attivita' pianificate</b> che non si vedono in Gestione attivita' &gt; Avvio. Spegnendo l'interruttore LagDoctor <b>toglie l'avvio automatico</b> (servizio Disattivato, attivita' disattivata): se e' aperto viene fermato <b>una volta sola</b> e non ripartira', senza chiusure continue. Riaccendi l'interruttore per rimettere tutto com'era (anche con "Ripristina tutto").</div>
     <div class="tools"><input type="search" id="st-q" placeholder="Cerca..." style="width:220px"><label class="chk"><input type="checkbox" id="st-all" ${S.stAll ? "checked" : ""}> Mostra anche i componenti di Windows</label>
       <span class="grow"></span><span class="mut" style="font-size:12px">Interruttore acceso = parte con Windows</span></div>
-    ${r.error && !r.items.length ? `<div class="empty">Non riesco a leggere servizi e attivita': ${esc(r.error)}</div>` : ""}
+    ${r.error ? `<div class="empty" style="text-align:left">${r.items.length ? "Letto solo in parte" : "Non riesco a leggere servizi e attivita'"}: ${esc(r.error)}</div>` : ""}
     <div id="st-list"></div>`;
   const draw = () => {
     const q = ($("#st-q").value || "").toLowerCase();
@@ -724,7 +724,7 @@ async function startupProcesses() {
       const it = r.items[c.dataset.p];
       c.disabled = true;
       try {
-        const x = await api("/api/autostart", { kind: it.kind, id: it.id, enabled: c.checked });
+        const x = await api("/api/autostart", { kind: it.kind, id: it.id, enabled: c.checked, exe: it.path });
         toast(it.name + ": " + x.msg, 4500);
         startupProcesses();
       } catch (e) { toast("Errore: " + e.message, 6000); c.checked = !c.checked; c.disabled = false; }

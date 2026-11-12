@@ -90,43 +90,142 @@ def classify(name, display, exe, company, windows):
 
 
 # ------------------------------------------------------------------ lettura
-PS_LIST = r"""
+# Attivita' pianificate: script su file (-File, niente problemi di virgolette sulla riga di comando) che scrive il
+# risultato in un file JSON UTF-8 (niente problemi di codifica dell'output della console).
+PS_TASKS = r"""
 $ErrorActionPreference = 'SilentlyContinue'
+$dest = $args[0]
 $win = $env:WINDIR.ToLower()
-function Exe($cmd) {
+function ExePath($cmd) {
   if (-not $cmd) { return '' }
   $c = [Environment]::ExpandEnvironmentVariables($cmd.Trim())
   if ($c.StartsWith('"')) { return $c.Split('"')[1] }
-  $i = $c.ToLower().IndexOf('.exe'); if ($i -gt 0) { return $c.Substring(0, $i + 4) }
-  return $c.Split(' ')[0]
+  return $c
 }
-$comp = @{}
-function Company($exe) {
-  if (-not $exe) { return '' }
-  $k = $exe.ToLower(); if ($comp.ContainsKey($k)) { return $comp[$k] }
-  $v = ''; try { $v = (Get-Item -LiteralPath $exe).VersionInfo.CompanyName } catch {}
-  if (-not $v) { $v = '' }; $comp[$k] = $v.Trim(); return $comp[$k]
-}
-$out = @()
-foreach ($s in Get-CimInstance Win32_Service) {
-  $exe = Exe $s.PathName
-  $reg = Get-ItemProperty ('HKLM:\SYSTEM\CurrentControlSet\Services\' + $s.Name)
-  $out += [pscustomobject]@{ kind='svc'; id=$s.Name; name=$s.DisplayName; exe=$exe; company=(Company $exe);
-    start=[int]$reg.Start; delayed=[int]$reg.DelayedAutostart; state=$s.State; pid=[int]$s.ProcessId;
-    desc=$s.Description; inwin=($exe.ToLower().StartsWith($win)); mstask=$false }
-}
+$out = New-Object System.Collections.ArrayList
 foreach ($t in Get-ScheduledTask) {
-  $a = $t.Actions | Where-Object { $_.Execute } | Select-Object -First 1
-  $exe = Exe $a.Execute
-  $tr = @($t.Triggers | ForEach-Object {
-    $n = $_.CimClass.CimClassName -replace 'MSFT_Task', '' -replace 'Trigger', ''
-    if ($_.Repetition -and $_.Repetition.Interval) { $n + '|' + $_.Repetition.Interval } else { $n } })
-  $out += [pscustomobject]@{ kind='task'; id=($t.TaskPath + $t.TaskName); name=$t.TaskName; exe=$exe;
-    company=(Company $exe); state=[string]$t.State; triggers=$tr; desc=$t.Description;
-    inwin=($exe.ToLower().StartsWith($win)); mstask=($t.TaskPath -like '\Microsoft\Windows\*') }
+  try {
+    $a = $t.Actions | Where-Object { $_.Execute } | Select-Object -First 1
+    $exe = ExePath $a.Execute
+    $tr = @($t.Triggers | ForEach-Object {
+      $n = $_.CimClass.CimClassName -replace 'MSFT_Task', '' -replace 'Trigger', ''
+      if ($_.Repetition -and $_.Repetition.Interval) { $n + '|' + $_.Repetition.Interval } else { $n } })
+    [void]$out.Add([pscustomobject]@{ kind = 'task'; id = ($t.TaskPath + $t.TaskName); name = $t.TaskName; exe = $exe;
+      state = [string]$t.State; triggers = $tr; desc = [string]$t.Description;
+      inwin = $exe.ToLower().StartsWith($win); mstask = ($t.TaskPath -like '\Microsoft\Windows\*') })
+  } catch {}
 }
-$out | ConvertTo-Json -Depth 4 -Compress
+$json = ConvertTo-Json -InputObject @($out) -Depth 4 -Compress
+[System.IO.File]::WriteAllText($dest, $json, (New-Object System.Text.UTF8Encoding($false)))
 """
+
+
+def _company(exe, _cache={}):
+    """Produttore scritto nel file .exe (Proprieta' > Dettagli), letto senza PowerShell."""
+    if not exe:
+        return ""
+    k = exe.lower()
+    if k in _cache:
+        return _cache[k]
+    val = ""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        ver = ctypes.windll.version
+        size = ver.GetFileVersionInfoSizeW(exe, None)
+        if size:
+            buf = ctypes.create_string_buffer(size)
+            if ver.GetFileVersionInfoW(exe, 0, size, buf):
+                p, n = ctypes.c_void_p(), wintypes.UINT()
+                langs = []
+                if ver.VerQueryValueW(buf, "\\VarFileInfo\\Translation", ctypes.byref(p), ctypes.byref(n)) and n.value:
+                    arr = (ctypes.c_ushort * (n.value // 2)).from_address(p.value)
+                    langs = ["%04x%04x" % (arr[x], arr[x + 1]) for x in range(0, len(arr) - 1, 2)]
+                for lg in langs + ["040904b0", "040904e4", "041004b0", "000004b0"]:
+                    if ver.VerQueryValueW(buf, "\\StringFileInfo\\%s\\CompanyName" % lg, ctypes.byref(p),
+                                          ctypes.byref(n)) and n.value:
+                        val = ctypes.wstring_at(p.value, n.value).strip("\x00 ").strip()
+                        if val:
+                            break
+    except Exception:
+        val = ""
+    _cache[k] = val
+    return val
+
+
+def _exe_of(cmd):
+    """Percorso del programma da una riga di comando di un servizio ("C:\\...\\x.exe" -k ...)."""
+    c = os.path.expandvars((cmd or "").strip())
+    if c.startswith('"'):
+        return c.split('"')[1] if c.count('"') >= 2 else c.strip('"')
+    low = c.lower()
+    k = low.find(".exe")
+    if k > 0:
+        return c[:k + 4]
+    return c.split(" ")[0]
+
+
+def _services():
+    import psutil
+    try:
+        import winreg
+    except ImportError:
+        winreg = None
+    win = os.environ.get("WINDIR", r"C:\Windows").lower()
+    out = []
+    for sv in psutil.win_service_iter():
+        try:
+            d = sv.as_dict()
+        except Exception:
+            continue
+        start = {"automatic": 2, "manual": 3, "disabled": 4}.get(d.get("start_type"), 0)
+        delayed = 0
+        if winreg is not None:
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\%s" % d["name"]) as k:
+                    try:
+                        delayed = int(winreg.QueryValueEx(k, "DelayedAutostart")[0])
+                    except OSError:
+                        delayed = 0
+                    try:
+                        start = int(winreg.QueryValueEx(k, "Start")[0])
+                    except OSError:
+                        pass
+            except OSError:
+                pass
+        exe = _exe_of(d.get("binpath"))
+        out.append({"kind": "svc", "id": d["name"], "name": d.get("display_name") or d["name"], "exe": exe,
+                    "company": _company(exe), "start": start, "delayed": delayed,
+                    "state": "Running" if d.get("status") == "running" else "Stopped", "pid": d.get("pid") or 0,
+                    "desc": d.get("description") or "", "inwin": exe.lower().startswith(win), "mstask": False})
+    return out
+
+
+def _tasks():
+    os.makedirs(paths.DATA_TOOLS, exist_ok=True)
+    script = os.path.join(paths.DATA_TOOLS, "leggi_attivita.ps1")
+    dest = os.path.join(paths.DATA_TOOLS, "attivita.json")
+    with open(script, "w", encoding="utf-8-sig") as f:
+        f.write(PS_TASKS)
+    try:
+        os.remove(dest)
+    except OSError:
+        pass
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+                            script, dest], capture_output=True, timeout=180, creationflags=CREATE_NO_WINDOW)
+        err = (r.stderr or b"").decode("utf-8", "replace").strip()
+    except Exception as e:
+        return [], str(e)
+    try:
+        with open(dest, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        return [], (err or str(e))[-300:]
+    data = data if isinstance(data, list) else [data]
+    for t in data:
+        t["company"] = _company(t.get("exe"))
+    return data, None
 
 
 def _ps(script, timeout=180):
@@ -199,13 +298,16 @@ def _running():
 
 
 def list_items(include_windows=False):
-    code, out, err = _ps(PS_LIST)
+    errors = []
     try:
-        raw = json.loads(out) if out else []
-    except ValueError:
+        raw = _services()
+    except Exception as e:
         raw = []
-    if isinstance(raw, dict):
-        raw = [raw]
+        errors.append("servizi: %s" % e)
+    tasks, terr = _tasks()
+    raw += tasks
+    if terr:
+        errors.append("attivita' pianificate: %s" % terr)
     mine = _load()
     by_exe, by_pid = _running()
     items = []
@@ -251,64 +353,77 @@ def list_items(include_windows=False):
                       "ours": ours})
     order = {g: i for i, (g, _n) in enumerate(GROUPS)}
     items.sort(key=lambda x: (order.get(x["group"], 9), not x["running"], x["name"].lower()))
-    return {"items": items, "groups": [{"id": g, "name": n} for g, n in GROUPS], "error": None if raw else (err or "lettura non riuscita")[-300:]}
+    return {"items": items, "groups": [{"id": g, "name": n} for g, n in GROUPS],
+            "error": "; ".join(errors) if errors else None}
 
 
 # ------------------------------------------------------------------ modifica
 def _svc_set(name, start, delayed=0):
     mode = {2: "delayed-auto" if delayed else "auto", 3: "demand", 4: "disabled"}[start]
-    r = subprocess.run(["sc", "config", name, "start=", mode], capture_output=True, text=True, timeout=30,
-                       creationflags=CREATE_NO_WINDOW)
-    if r.returncode != 0:
-        raise RuntimeError("Windows non permette di cambiarlo (%s)" % (r.stdout + r.stderr).strip()[-160:])
+    code, out = _run(["sc", "config", name, "start=", mode], 30)
+    if code != 0:
+        raise RuntimeError("Windows non permette di cambiarlo (%s)" % out[-160:])
 
 
-def set_enabled(kind, ident, enabled):
+def _run(args, timeout=60):
+    try:
+        r = subprocess.run(args, capture_output=True, timeout=timeout, creationflags=CREATE_NO_WINDOW)
+        out = (r.stdout or b"").decode("mbcs" if os.name == "nt" else "utf-8", "replace")
+        err = (r.stderr or b"").decode("mbcs" if os.name == "nt" else "utf-8", "replace")
+        return r.returncode, (out + err).strip()
+    except Exception as e:
+        return 1, str(e)
+
+
+def _svc_start_now(name):
+    """(Start, DelayedAutostart) dal registro."""
+    import winreg
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services\%s" % name) as k:
+        start = int(winreg.QueryValueEx(k, "Start")[0])
+        try:
+            delayed = int(winreg.QueryValueEx(k, "DelayedAutostart")[0])
+        except OSError:
+            delayed = 0
+    return start, delayed
+
+
+def set_enabled(kind, ident, enabled, exe=None):
     """Spegne o riaccende l'avvio di un servizio o di un'attivita'. Restituisce un messaggio."""
     mine = _load()
     key = "%s:%s" % (kind, ident)
-    q = ident.replace("'", "''")
     if kind == "svc":
         if not enabled:
-            code, out, _e = _ps("$r = Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\%s'; "
-                                "'' + [int]$r.Start + '|' + [int]$r.DelayedAutostart" % q, timeout=30)
             try:
-                start, delayed = (int(x) for x in out.strip().split("|"))
-            except ValueError:
+                start, delayed = _svc_start_now(ident)
+            except OSError:
                 raise RuntimeError("servizio non trovato")
             if key not in mine:
                 mine[key] = {"start": start, "delayed": delayed}
                 _save(mine)
             _svc_set(ident, 4)
-            _ps("Stop-Service -Name '%s' -Force -ErrorAction SilentlyContinue" % q, timeout=60)
+            _run(["sc", "stop", ident], 60)
             return "non partira' piu' con Windows (fermato)"
         prev = mine.get(key) or {"start": 2, "delayed": 0}
-        _svc_set(ident, prev.get("start", 2) if prev.get("start", 2) in (2, 3) else 2, prev.get("delayed", 0))
-        if prev.get("start", 2) == 2:
-            _ps("Start-Service -Name '%s' -ErrorAction SilentlyContinue" % q, timeout=60)
+        start = prev.get("start", 2) if prev.get("start", 2) in (2, 3) else 2
+        _svc_set(ident, start, prev.get("delayed", 0))
+        if start == 2:
+            _run(["sc", "start", ident], 60)
         mine.pop(key, None)
         _save(mine)
         return "riattivato come prima"
-    # attivita' pianificata
-    i = ident.rfind("\\")
-    tp, tn = ident[:i + 1].replace("'", "''"), ident[i + 1:].replace("'", "''")
+    # attivita' pianificata (schtasks: nessun problema di virgolette o di lingua, conta solo il codice di uscita)
     if not enabled:
-        code, out, err = _ps("$t = Get-ScheduledTask -TaskPath '%s' -TaskName '%s' -ErrorAction Stop; "
-                             "$a = ($t.Actions | Where-Object { $_.Execute } | Select-Object -First 1).Execute; "
-                             "Stop-ScheduledTask -TaskPath '%s' -TaskName '%s' -ErrorAction SilentlyContinue; "
-                             "Disable-ScheduledTask -TaskPath '%s' -TaskName '%s' -ErrorAction Stop | Out-Null; "
-                             "'OK|' + [Environment]::ExpandEnvironmentVariables($a)" % (tp, tn, tp, tn, tp, tn), 60)
-        if not out.startswith("OK|"):
-            raise RuntimeError("Windows non permette di disattivarla (%s)" % (err or out)[-160:])
+        _run(["schtasks", "/End", "/TN", ident], 30)
+        code, out = _run(["schtasks", "/Change", "/TN", ident, "/DISABLE"], 60)
+        if code != 0:
+            raise RuntimeError("Windows non permette di disattivarla (%s)" % out[-160:])
         mine[key] = {"enabled": True}
         _save(mine)
-        exe = out[3:].strip().strip('"')
         closed = _close_exe(exe)
         return "non partira' piu' con Windows" + (" (chiuso %s)" % os.path.basename(exe) if closed else "")
-    code, out, err = _ps("Enable-ScheduledTask -TaskPath '%s' -TaskName '%s' -ErrorAction Stop | Out-Null; 'OK'"
-                         % (tp, tn), 60)
-    if "OK" not in out:
-        raise RuntimeError("Windows non permette di riattivarla (%s)" % (err or out)[-160:])
+    code, out = _run(["schtasks", "/Change", "/TN", ident, "/ENABLE"], 60)
+    if code != 0:
+        raise RuntimeError("Windows non permette di riattivarla (%s)" % out[-160:])
     mine.pop(key, None)
     _save(mine)
     return "riattivata come prima"

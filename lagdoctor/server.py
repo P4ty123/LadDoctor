@@ -704,7 +704,7 @@ class Handler(BaseHTTPRequestHandler):
             return 200, {"ok": True}
         elif path == "/api/autostart":
             try:
-                return 200, {"ok": True, "msg": autostart.set_enabled(b.get("kind"), b.get("id", ""), bool(b.get("enabled")))}
+                return 200, {"ok": True, "msg": autostart.set_enabled(b.get("kind"), b.get("id", ""), bool(b.get("enabled")), b.get("exe"))}
             except Exception as e:
                 return 400, {"error": str(e)}
         elif path == "/api/startup":

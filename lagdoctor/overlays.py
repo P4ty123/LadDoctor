@@ -420,6 +420,18 @@ class OverlayItem(T.Tweak):
                     b["startup"].append(it)
         return b
 
+    def reapply(self, backup):
+        """Gia' spento da LagDoctor ma riaperto (o riacceso dal programma): lo rispengo."""
+        if self._off:
+            self._off()
+        if self.block:
+            kill(self.block)
+        for it in T.startup_items():
+            cmd = (it.get("name", "") + " " + it.get("cmd", "")).lower()
+            if self.startup and it.get("enabled") and any(w in cmd for w in self.startup):
+                T.set_startup(it, False)
+        return "spento di nuovo"
+
     def revert(self, backup):
         backup = backup or {}
         if self._on and backup.get("cfg") is not None:
@@ -481,7 +493,7 @@ ITEMS = [
         "Alt+R / Ctrl+Maiusc+O: metriche, registrazione e replay istantaneo",
         "AMD Software > ingranaggio in alto a destra > Preferenze > disattiva \"Overlay di gioco\". In Prestazioni > "
         "Metriche disattiva l'overlay delle metriche; in Registrazione spegni \"Replay istantaneo\".",
-        lambda: _exists(_pf("AMD", "CNext", "CNext", "RadeonSoftware.exe")), procs=("amdow.exe",),
+        lambda: _exists(_pf("AMD", "CNext", "CNext", "RadeonSoftware.exe")), procs=("amdow.exe",), by_process=True,
         block=("amdow.exe",),
         how_ld="LagDoctor chiude l'overlay di AMD Software. AMD Software lo riapre al prossimo avvio: con la Game mode attiva LagDoctor lo richiude a ogni partita. Per spegnerlo per sempre usa anche il punto qui sopra."),
     OverlayItem(

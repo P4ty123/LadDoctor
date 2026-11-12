@@ -286,7 +286,8 @@ function statusBadge(t) {
 const riskCls = ["b-ok", "b-acc", "b-warn", "b-bad"];
 const effCls = { alta: "b-ok", media: "b-ok", bassa: "", comfort: "", dubbia: "b-warn", sconsigliata: "b-bad" };
 /* si puo' spuntare solo cio' che non e' gia' attivo */
-const selectable = (t) => !isOn(t) && !t.ignored && !t.manual;
+const selectable = (t) => t.kind === "overlay" ? (!t.ignored && !t.manual && (!isOn(t) || (t.running && t.running.length > 0)))
+  : !isOn(t) && !t.ignored && !t.manual;
 const OV_CAT = "Overlays";
 
 async function tweaksPage() {
@@ -412,6 +413,7 @@ function stateHtml(t) {
 }
 function switchHtml(t) {
   if (t.manual) return `<button class="ghost sm how-btn" data-how="${t.id}" title="Si spegne dal programma: ti dico dove">${S.open.has(t.id) ? "Chiudi" : "Come spegnerlo"}</button>`;
+  if (t.kind === "overlay") return ovSwitchHtml(t);
   const on = isOn(t) || S.sel.has(t.id);
   let tip = "", dis = false;
   if (t.ignored) { dis = true; tip = "Voce ignorata"; }
@@ -421,6 +423,19 @@ function switchHtml(t) {
   else if (t.kind === "overlay") tip = S.sel.has(t.id) ? "Verra' spento quando premi Applica" : "Accendi per spegnere questo overlay (poi premi Applica)";
   else tip = S.sel.has(t.id) ? "Selezionata: premi Applica in basso" : "Seleziona per applicarla";
   return `<label class="switch${S.sel.has(t.id) ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
+}
+/* overlay: l'interruttore mostra l'OVERLAY (acceso = l'overlay e' acceso). Spegnendolo lo si seleziona per Applica. */
+const ovOn = (t) => !isOn(t) || (t.running && t.running.length > 0);
+function ovSwitchHtml(t) {
+  const pend = S.sel.has(t.id), on = ovOn(t) && !pend;
+  let tip, dis = false;
+  if (t.ignored) { dis = true; tip = "Voce ignorata"; }
+  else if (pend) tip = "Verra' spento quando premi Applica (riaccendi l'interruttore per annullare)";
+  else if (t.applied && !ovOn(t)) tip = "Spento da LagDoctor: riaccendi per rimetterlo come prima";
+  else if (t.applied) tip = "Spento da LagDoctor ma si e' riaperto: spegni l'interruttore e premi Applica per richiuderlo";
+  else if (!ovOn(t)) { dis = true; tip = "Gia' spento (dal programma o da Windows)"; }
+  else tip = "Spegni l'interruttore e premi Applica per spegnere questo overlay";
+  return `<label class="switch${pend ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
 }
 function rowHtml(t) {
   return `<div class="tw2 ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
@@ -460,7 +475,13 @@ function renderTweaks() {
   const scope = act.filter((t) => !S.twCat || t.cat === S.twCat);
   const sTot = scope.filter((t) => t.kind !== "myth" || isOn(t)).length;
   const allMyth = scope.length && scope.every((t) => t.kind === "myth");
-  $("#pan-s").textContent = (allMyth ? `${scope.length} voci · ${scope.filter(isOn).length} attive sul tuo PC` : `${scope.filter((t) => isOn(t) && t.kind !== "myth").length} attive su ${sTot}`) + (fname ? ` · ${list.length} ${fname}` : "") +
+  const ovs = S.twCat === OV_CAT ? scope.filter((t) => t.kind === "overlay") : [];
+  if (ovs.length) {
+    const acc = ovs.filter((t) => t.status === false || (t.running && t.running.length)).length;
+    const off = ovs.filter((t) => t.status === true && !(t.running && t.running.length)).length, unk = ovs.length - acc - off;
+    $("#pan-s").textContent = `Overlay installati: ${acc} ${acc === 1 ? "acceso" : "accesi"}, ${off} ${off === 1 ? "spento" : "spenti"}` +
+      (unk ? `, ${unk} da controllare` : "") + (fname ? ` · ${list.length} ${fname}` : "");
+  } else $("#pan-s").textContent = (allMyth ? `${scope.length} voci · ${scope.filter(isOn).length} attive sul tuo PC` : `${scope.filter((t) => isOn(t) && t.kind !== "myth").length} attive su ${sTot}`) + (fname ? ` · ${list.length} ${fname}` : "") +
     (S.twCat === "Sicurezza" ? " · voci pericolose: chiedono una conferma prima di essere applicate" : "");
   const groups = {};
   /* overlay: prima quelli che girano adesso, poi accesi, da controllare, spenti; poi le voci di Windows */
@@ -486,6 +507,13 @@ function renderTweaks() {
   $$("[data-sw]").forEach((cb) => cb.addEventListener("change", (e) => {
     const id = cb.dataset.sw, t = tws().find((x) => x.id === id);
     if (!t) return;
+    if (t.kind === "overlay") {
+      if (S.sel.has(id)) S.sel.delete(id);                                  // riacceso prima di applicare
+      else if (t.applied && !ovOn(t)) { e.target.checked = false; return revertIds([id]); }  // riaccendo
+      else if (ovOn(t) && !t.ignored && !t.manual) S.sel.add(id);  // da spegnere (o da richiudere se si e' riaperto)
+      else e.target.checked = ovOn(t);
+      return renderTweaks();
+    }
     if (t.applied) { e.target.checked = true; return revertIds([id]); }
     if (t.kind === "myth" && t.status === true) { e.target.checked = true; return forceOff(id); }
     if (!selectable(t)) { e.target.checked = isOn(t); return; }
@@ -499,7 +527,8 @@ function renderTweaks() {
   $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
   if (S.twCat === OV_CAT) { const rb = $("#ov-refresh"); if (rb) rb.onclick = () => loadOverlays(true); if (!S.ovLoaded) loadOverlays(false); }
   const n = S.sel.size;
-  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : "Accendi l'interruttore delle voci che vuoi e premi Applica. Clicca sul nome di una voce per leggere cosa fa.";
+  $("#sel-count").textContent = n ? n + (n === 1 ? " voce selezionata" : " voci selezionate") + ": premi Applica (clicca sul nome di una voce per leggere cosa fa)" : S.twCat === OV_CAT ? "Overlay: spegni l'interruttore di quelli che vuoi disattivare e premi Applica. Voci di Windows: accendi l'interruttore e premi Applica."
+    : "Accendi l'interruttore delle voci che vuoi e premi Applica. Clicca sul nome di una voce per leggere cosa fa.";
   $("#apply-btn").disabled = !n;
 }
 /* overlay: cosa gira adesso (si aggiorna ogni volta che apri la categoria) */

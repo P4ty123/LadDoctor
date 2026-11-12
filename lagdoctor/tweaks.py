@@ -1330,6 +1330,8 @@ def apply_one(tid):
     t = BY_ID[tid]
     state = load_state()
     if tid in state:
+        if hasattr(t, "reapply"):  # overlay spento da LagDoctor ma riaperto: lo richiudo
+            return t.reapply(state[tid].get("backup") or {})
         return "gia' applicata"
     if t.group:  # annulla prima l'alternativa dello stesso gruppo (es. due valori per la stessa chiave)
         for other in [o for o in state if BY_ID.get(o) and BY_ID[o].group == t.group]:

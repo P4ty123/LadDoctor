@@ -1,3 +1,12 @@
+## LagDoctor 5.17.3
+
+- Overlays: l'interruttore ora mostra l'overlay stesso. Acceso = overlay acceso; per spegnerlo spegni l'interruttore
+  e premi Applica. Su un overlay spento da LagDoctor, riaccendere l'interruttore lo rimette come prima.
+- Se un overlay spento da LagDoctor si riapre (es. NVIDIA dopo il riavvio), l'interruttore torna acceso e si puo'
+  spegnere di nuovo.
+- In cima alla categoria: quanti overlay sono accesi, spenti e da controllare.
+- Overlay AMD: se il suo processo non e' aperto risulta spento.
+
 ## LagDoctor 5.17.2
 
 - Overlays: tolta dai dettagli la riga arancione "Attenzione: ...", che ripeteva "Possibili problemi".

@@ -1,3 +1,9 @@
+## LagDoctor 5.20.2
+
+- Corretto l'errore "partially initialized module lagdoctor.extra_tweaks" all'accesso a Windows: il processo
+  invisibile del Timer Resolution (LagDoctor.exe --timer) si chiudeva subito con questa finestra di errore,
+  quindi il timer a 0,5 ms all'avvio non funzionava.
+
 ## LagDoctor 5.20.1
 
 - Avvio automatico > Processi in background: corretta la lettura (prima risultava vuota). I servizi ora vengono

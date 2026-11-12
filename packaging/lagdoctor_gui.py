@@ -35,7 +35,9 @@ def main():
         from lagdoctor import tweaks, overlays  # noqa: F401 (tweaks prima: registra le voci degli overlay)
         overlays.guard_main()
     elif args[:1] == ["--timer"]:
-        from lagdoctor import extra_tweaks
+        # tweaks va importato per primo: e' lui che carica extra_tweaks (importare prima extra_tweaks creava
+        # un import circolare e LagDoctor.exe --timer si chiudeva con un errore all'accesso a Windows)
+        from lagdoctor import tweaks, extra_tweaks  # noqa: F401
         units = int(args[1]) if len(args) > 1 and args[1].isdigit() else 5000
         exec(compile(extra_tweaks.TIMER_SCRIPT % units, "timer_resolution", "exec"), {"__name__": "__main__"})
     else:

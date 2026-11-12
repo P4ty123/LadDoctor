@@ -356,7 +356,9 @@ function visible() {
 function docHtml(t) {
   const d = t.doc || { cosa: t.desc, perche: "", problemi: "" };
   const myth = t.kind === "myth";
-  return `<div class="more doc">
+  /* Overlays: la descrizione breve non sta sotto il nome ma qui, in cima ai dettagli */
+  const lead = t.cat === OV_CAT && t.desc && t.desc !== d.cosa ? `<p class="lead">${esc(t.desc)}</p>` : "";
+  return `<div class="more doc">${lead}
     <div><h4>${myth ? "Cosa fa" : "A cosa serve questa impostazione"}</h4><p>${esc(d.cosa)}</p></div>
     <div><h4 class="ok">${myth ? "Quando potrebbe aiutare" : "Perche' cambiarla"}</h4><p>${esc(d.perche || t.desc)}</p></div>
     <div><h4 class="bad">${myth ? "Perche' e' meglio lasciarla disattivata" : "Possibili problemi"}</h4><p>${esc(d.problemi || "Nessuno noto.")}</p></div>
@@ -422,7 +424,7 @@ function switchHtml(t) {
 }
 function rowHtml(t) {
   return `<div class="tw2 ${S.sel.has(t.id) ? "sel" : ""}" data-id="${t.id}">
-    <div class="tx name"><b>${esc(t.name)}</b><div>${esc(t.desc || (t.doc && t.doc.cosa) || "")} <span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span> ${actionHtml(t)}</div></div>
+    <div class="tx name"><b>${esc(t.name)}</b><div>${t.cat === OV_CAT ? "" : esc(t.desc || (t.doc && t.doc.cosa) || "") + " "}<span class="info-hint">${S.open.has(t.id) ? "▴ chiudi" : "▾ dettagli"}</span> ${actionHtml(t)}</div></div>
     <div class="right"><span class="stc">${stateHtml(t)}</span>${dotsHtml(t)}<span class="risk ${RISK_CLS[t.risk] || "m"}">${esc(t.risk_label)}</span>${switchHtml(t)}</div>
     ${S.open.has(t.id) ? docHtml(t) : ""}
   </div>`;

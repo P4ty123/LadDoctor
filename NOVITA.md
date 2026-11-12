@@ -1,3 +1,7 @@
+## LagDoctor 5.17.1
+
+- Overlays: sotto il nome di ogni voce resta solo "dettagli"; la descrizione breve e' stata spostata in cima ai dettagli.
+
 ## LagDoctor 5.17.0
 
 - Overlays: ora si spengono anche da LagDoctor, con l'interruttore e Applica (ogni modifica si annulla):

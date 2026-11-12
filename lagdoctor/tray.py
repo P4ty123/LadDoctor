@@ -113,7 +113,15 @@ class Tray:
                 self.hicon = u32.LoadImageW(None, self.icon_path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE)
             if not self.hicon:
                 self.hicon = u32.LoadIconW(None, wintypes.LPCWSTR(32512))  # IDI_APPLICATION
-            self.ok = self._add()
+            # l'area di notifica puo' non rispondere subito (PC lento o appena acceso): riprovo per ~30 secondi
+            import time as _t
+            for i in range(15):
+                if self._add():
+                    self.ok = True
+                    break
+                if i == 2:
+                    self._ready.set()  # non blocco l'avvio: se l'icona arriva dopo, LagDoctor se ne accorge
+                _t.sleep(2)
         except Exception:
             self.ok = False
         self._ready.set()

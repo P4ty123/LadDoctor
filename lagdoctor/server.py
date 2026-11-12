@@ -900,6 +900,10 @@ def _auto_exit():
         if STATE["busy"] and JOBS.get(STATE["busy"]) and JOBS[STATE["busy"]].status == "running":
             STATE["last_req"] = now  # mai chiudere durante un'operazione
             continue
+        if TRAY is not None and TRAY.ok:
+            STATE["last_req"] = now  # l'icona e' comparsa dopo (PC lento all'avvio): chiudere la finestra non esce
+            STATE["bye"] = None
+            continue
         bye = STATE.get("bye")
         if bye and now - bye > 8 and STATE["last_req"] <= bye + 0.5:
             break
@@ -1097,7 +1101,7 @@ def run(open_ui=True, port=0, minimized=False, from_logon=False):
         TRAY = tray.Tray(os.path.join(UI_DIR, "lagdoctor.ico"), on_open=show_window, on_quit=quit_all,
                          tooltip="LagDoctor " + __version__)
         try:
-            tray_ok = TRAY.start()
+            tray_ok = TRAY.start(timeout=20)  # PC lenti (mini PC) appena acceso: l'area di notifica risponde tardi
         except Exception:
             tray_ok = False
     if (paths.FROZEN or from_logon) and open_ui and not tray_ok:

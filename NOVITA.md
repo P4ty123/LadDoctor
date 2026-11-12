@@ -1,3 +1,9 @@
+## LagDoctor 5.20.4
+
+- Icona vicino all'orologio: sui PC lenti o appena accesi (es. mini PC) l'area di notifica puo' rispondere in
+  ritardo e l'icona non veniva creata, quindi chiudendo la finestra LagDoctor si chiudeva del tutto. Ora riprova
+  per circa 30 secondi e, se l'icona compare dopo, chiudere la finestra la riduce comunque a icona.
+
 ## LagDoctor 5.20.3
 
 - Timer Resolution: la voce risulta attiva solo se il timer e' davvero a 0,5 ms (prima bastava che esistesse

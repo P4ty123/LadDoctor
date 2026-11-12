@@ -6,8 +6,11 @@ Per ogni programma installato LagDoctor controlla, dove e' possibile leggerlo, s
 Come LagDoctor li spegne (ogni modifica si annulla):
   - "impostazione": scrive l'impostazione del programma nel suo file (Steam, app EA, Ubisoft Connect). Il programma
     deve essere chiuso, altrimenti la sovrascrive uscendo: LagDoctor lo chiude prima.
-  - "processo": l'overlay e' un programma a parte (NVIDIA, AMD, RivaTuner, Overwolf). LagDoctor lo chiude, ne toglie
-    l'avvio con Windows e la Game mode lo richiude a ogni partita.
+  - "processo": l'overlay e' un programma a parte (NVIDIA, AMD, RivaTuner, Overwolf). LagDoctor lo chiude e ne toglie
+    l'avvio con Windows.
+  Un overlay spento da LagDoctor RESTA spento: un piccolo processo invisibile (LagDoctor.exe --overlay, attivita'
+  "LagDoctor Overlay" all'accesso) lo richiude se si riapre e rimette l'impostazione se il programma la riaccende
+  (es. l'app EA dopo un aggiornamento). Parte solo se c'e' almeno un overlay spento da LagDoctor.
   - Discord, Intel e GOG non hanno un'impostazione modificabile dall'esterno: la voce spiega dove spegnerlo.
 
 Le voci di Windows che riguardano gli overlay (Game Bar, registrazione in background, MPO) sono normali
@@ -363,12 +366,14 @@ class OverlayItem(T.Tweak):
     closes: programma che LagDoctor deve chiudere per cambiare l'impostazione (mostrato prima di applicare)."""
 
     def __init__(self, id, name, desc, how, installed, procs=(), setting=None, by_process=False,
-                 efficacy="bassa", warning="", off=None, on=None, block=(), startup=(), closes=None, how_ld=None):
+                 efficacy="bassa", warning="", off=None, on=None, block=(), startup=(), closes=None, how_ld=None,
+                 app_procs=()):
         super().__init__(id, CAT, name, desc, efficacy, risk=0, warning=warning, recommend=lambda s: False,
                          kind="overlay")
         self.how = how
         self._off, self._on, self.block, self.startup = off, on, tuple(block), tuple(startup)
         self.closes = closes
+        self.app_procs = tuple(app_procs)  # il programma: l'impostazione si riscrive solo quando e' chiuso
         self.how_ld = how_ld  # cosa fa LagDoctor quando lo spegni
         self.manual = off is None and not block
         self._installed = installed
@@ -418,6 +423,10 @@ class OverlayItem(T.Tweak):
                 if it.get("enabled") and any(w in cmd for w in self.startup):
                     T.set_startup(it, False)
                     b["startup"].append(it)
+        try:
+            guard_install()
+        except Exception:
+            pass
         return b
 
     def reapply(self, backup):
@@ -449,7 +458,123 @@ class OverlayItem(T.Tweak):
         elif isinstance(cfg.get("reopen"), list):
             relaunch(cfg["reopen"])
         _snap["t"] = 0.0
+        try:
+            guard_sync(exclude=self.id)
+        except Exception:
+            pass
         return "riacceso"
+
+
+# ---------------------------------------------------------------- il guardiano: gli overlay spenti restano spenti
+GUARD_TASK = "LagDoctor Overlay"
+GUARD_ARG = "--overlay"
+CREATE_NO_WINDOW = 0x08000000
+
+
+def _run(args):
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW)
+        return r.returncode, (r.stdout + r.stderr).strip()
+    except Exception as e:
+        return 1, str(e)
+
+
+def _state():
+    try:
+        from . import paths
+        with open(paths.data("modifiche_applicate.json"), encoding="utf-8") as f:
+            st = json.load(f)
+        return {k: v for k, v in st.items() if k.startswith("ov_") and isinstance(v, dict)}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _guard_pids():
+    import psutil
+    out = []
+    for p in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            cl = p.info.get("cmdline") or []
+        except Exception:
+            continue
+        if GUARD_ARG in cl and p.pid != os.getpid() and any("lagdoctor" in (c or "").lower() for c in cl):
+            out.append(p.pid)
+    return out
+
+
+def guard_install(start=True):
+    """Attivita' all'accesso + avvio subito (se non gira gia')."""
+    from . import paths
+    cmd = paths.gui_cmd(GUARD_ARG)
+    code, out = _run(["schtasks", "/Create", "/TN", GUARD_TASK, "/TR", paths.quote(cmd), "/SC", "ONLOGON",
+                      "/RL", "HIGHEST", "/F"])
+    if start and not _guard_pids():
+        subprocess.Popen(cmd, close_fds=True, creationflags=CREATE_NO_WINDOW | 0x00000008)
+    return code == 0
+
+
+def guard_remove():
+    _run(["schtasks", "/Delete", "/TN", GUARD_TASK, "/F"])
+    import psutil
+    for pid in _guard_pids():
+        try:
+            psutil.Process(pid).kill()
+        except Exception:
+            pass
+
+
+def guard_sync(exclude=None):
+    """Dopo un annullamento: se non resta nessun overlay spento da LagDoctor il guardiano non serve piu'."""
+    if not [k for k in _state() if k != exclude]:
+        guard_remove()
+
+
+def guard_repair():
+    """All'avvio di LagDoctor (anche dopo un aggiornamento): attivita' col percorso attuale e guardiano acceso."""
+    if _state():
+        guard_install()
+    else:
+        _run(["schtasks", "/Delete", "/TN", GUARD_TASK, "/F"])
+
+
+def guard_once(check_settings):
+    """Un giro di controllo. Restituisce quanti overlay sta tenendo spenti."""
+    st = _state()
+    blocked = set()
+    for tid, v in st.items():
+        blocked.update((v.get("backup") or {}).get("block") or [])
+    if blocked and blocked & running_names(0):
+        kill(blocked)
+    if check_settings:
+        names = running_names(0)
+        for t in ITEMS:
+            if t.id in st and t._off and t._setting and not (set(t.app_procs) & names):
+                try:
+                    if t._setting() is True:  # il programma l'ha riacceso (es. dopo un aggiornamento)
+                        t._off()
+                except Exception:
+                    pass
+    return len(st)
+
+
+def guard_main(interval=5):
+    """LagDoctor.exe --overlay: gira finche' c'e' almeno un overlay spento da LagDoctor."""
+    if os.name == "nt":
+        import ctypes
+        ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\LagDoctorOverlayGuard")
+        if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS: un altro guardiano e' gia' attivo
+            return
+    n, empty = 0, 0
+    while True:
+        try:
+            left = guard_once(check_settings=(n % 12 == 0))  # impostazioni ogni minuto, processi ogni 5 secondi
+        except Exception:
+            left = 1
+        empty = empty + 1 if left == 0 else 0
+        if empty >= 3:
+            return
+        n += 1
+        time.sleep(interval)
 
 
 def blocked_processes():
@@ -476,8 +601,8 @@ ITEMS = [
         lambda: _steam_dir(), procs=("gameoverlayui.exe", "gameoverlayui64.exe"), setting=steam_overlay_enabled,
         warning="Senza overlay non funzionano chat, guida e browser di Steam dentro il gioco, e in alcuni giochi "
                 "i controller configurati con Steam Input.",
-        off=steam_disable, on=steam_restore, closes="Steam", efficacy="bassa",
-        how_ld="LagDoctor chiude Steam (come dal menu Esci) e spegne l'overlay nelle sue impostazioni per tutti i giochi. Riapri Steam quando vuoi: l'impostazione resta."),
+        off=steam_disable, on=steam_restore, closes="Steam", app_procs=("steam.exe",), efficacy="bassa",
+        how_ld="LagDoctor chiude Steam (come dal menu Esci) e spegne l'overlay nelle sue impostazioni per tutti i giochi. Riapri Steam quando vuoi: l'overlay resta spento, e se l'impostazione venisse riaccesa LagDoctor la rimette."),
     OverlayItem(
         "ov_nvidia", "Overlay NVIDIA (NVIDIA App / GeForce Experience)",
         "Alt+Z: statistiche, filtri, screenshot e Instant Replay",
@@ -487,7 +612,7 @@ ITEMS = [
         lambda: _exists(_pf("NVIDIA Corporation", "NVIDIA app"), _pf("NVIDIA Corporation", "NVIDIA GeForce Experience")),
         procs=("nvidia overlay.exe", "nvidia share.exe"), by_process=True, efficacy="media",
         block=("nvidia overlay.exe", "nvidia share.exe"),
-        how_ld="LagDoctor chiude l'overlay NVIDIA (e con lui Instant Replay). L'app NVIDIA lo riapre al prossimo avvio di Windows: con la Game mode attiva LagDoctor lo richiude a ogni partita. Per spegnerlo per sempre usa anche il punto qui sopra nell'app NVIDIA."),
+        how_ld="LagDoctor chiude l'overlay NVIDIA (e con lui Instant Replay). Resta spento anche dopo il riavvio: se si riapre, LagDoctor lo richiude entro pochi secondi."),
     OverlayItem(
         "ov_amd", "Overlay di AMD Software (Adrenalin)",
         "Alt+R / Ctrl+Maiusc+O: metriche, registrazione e replay istantaneo",
@@ -495,7 +620,7 @@ ITEMS = [
         "Metriche disattiva l'overlay delle metriche; in Registrazione spegni \"Replay istantaneo\".",
         lambda: _exists(_pf("AMD", "CNext", "CNext", "RadeonSoftware.exe")), procs=("amdow.exe",), by_process=True,
         block=("amdow.exe",),
-        how_ld="LagDoctor chiude l'overlay di AMD Software. AMD Software lo riapre al prossimo avvio: con la Game mode attiva LagDoctor lo richiude a ogni partita. Per spegnerlo per sempre usa anche il punto qui sopra."),
+        how_ld="LagDoctor chiude l'overlay di AMD Software. Resta spento anche dopo il riavvio: se si riapre, LagDoctor lo richiude entro pochi secondi."),
     OverlayItem(
         "ov_intel", "Overlay Intel (Intel Graphics Software / Arc Control)",
         "Overlay delle prestazioni e registrazione della scheda video Intel",
@@ -517,7 +642,7 @@ ITEMS = [
         lambda: _exists(_pf86("RivaTuner Statistics Server", "RTSS.exe")),
         procs=("rtss.exe", "rtsshooksloader64.exe"), by_process=True,
         block=("rtss.exe", "rtsshooksloader64.exe", "rtsshooksloader.exe"), startup=("rtss", "rivatuner"),
-        how_ld="LagDoctor chiude RivaTuner, ne toglie l'avvio con Windows e la Game mode lo richiude a ogni partita. Se MSI Afterburner lo riapre da solo, togli anche l'avvio di Afterburner (pagina Avvio automatico)."),
+        how_ld="LagDoctor chiude RivaTuner e ne toglie l'avvio con Windows. Resta spento anche dopo il riavvio: se si riapre, LagDoctor lo richiude entro pochi secondi. Vale anche se lo riapre MSI Afterburner."),
     OverlayItem(
         "ov_overwolf", "Overwolf (Outplayed, Porofessor e altre app overlay)",
         "Piattaforma di app che si disegnano sopra i giochi",
@@ -525,22 +650,22 @@ ITEMS = [
         "impostazioni di Overwolf puoi spegnere l'overlay gioco per gioco.",
         lambda: _exists(_pf86("Overwolf")), procs=("overwolf.exe",), by_process=True, efficacy="media",
         block=("overwolf.exe", "overwolfbrowser.exe", "overwolfhelper.exe", "overwolfhelper64.exe"), startup=("overwolf",),
-        how_ld="LagDoctor chiude Overwolf, ne toglie l'avvio con Windows e la Game mode lo richiude a ogni partita."),
+        how_ld="LagDoctor chiude Overwolf e ne toglie l'avvio con Windows. Resta spento anche dopo il riavvio: se si riapre, LagDoctor lo richiude entro pochi secondi."),
     OverlayItem(
         "ov_ea", "Overlay dell'app EA",
         "Menu Maiusc+F1 dentro i giochi EA",
         "App EA > menu (tre linee in alto a sinistra) > Impostazioni > Applicazione > disattiva \"Overlay in gioco\".",
         lambda: _exists(_pf("Electronic Arts", "EA Desktop")), procs=("igoproxy64.exe", "igoproxy.exe"),
-        setting=ea_overlay_enabled, off=ea_disable, on=ea_restore, closes="app EA",
-        how_ld="LagDoctor chiude l'app EA e spegne l'overlay nel suo file delle impostazioni (user.igoenabled=0). Dopo un aggiornamento l'app EA potrebbe riaccenderlo: LagDoctor te lo segnala qui."),
+        setting=ea_overlay_enabled, off=ea_disable, on=ea_restore, closes="app EA", app_procs=("eadesktop.exe",),
+        how_ld="LagDoctor chiude l'app EA e spegne l'overlay nel suo file delle impostazioni (user.igoenabled=0). Se l'app EA lo riaccende (succede dopo i suoi aggiornamenti), LagDoctor lo rispegne appena l'app viene chiusa."),
     OverlayItem(
         "ov_ubisoft", "Overlay di Ubisoft Connect",
         "Menu Maiusc+F2 dentro i giochi Ubisoft",
         "Ubisoft Connect > menu (tre linee) > Impostazioni > Generale > disattiva \"Abilita overlay in gioco per i "
         "giochi supportati\".",
         lambda: _exists(_pf86("Ubisoft", "Ubisoft Game Launcher")), setting=ubisoft_overlay_enabled,
-        off=ubisoft_disable, on=ubisoft_restore, closes="Ubisoft Connect",
-        how_ld="LagDoctor chiude Ubisoft Connect e spegne l'overlay nelle sue impostazioni."),
+        off=ubisoft_disable, on=ubisoft_restore, closes="Ubisoft Connect", app_procs=("upc.exe",),
+        how_ld="LagDoctor chiude Ubisoft Connect e spegne l'overlay nelle sue impostazioni. Resta spento: se venisse riacceso, LagDoctor lo rimette appena Ubisoft Connect viene chiuso."),
     OverlayItem(
         "ov_gog", "Overlay di GOG Galaxy",
         "Menu Maiusc+Tab dentro i giochi GOG",

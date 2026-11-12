@@ -4,6 +4,7 @@
   LagDoctor.exe --gamemode      game mode invisibile (parte con Windows)
   LagDoctor.exe --timer 5000    tiene il timer di sistema a 0,5 ms (parte con Windows)
   LagDoctor.exe --avvio-windows [--ridotto]   avvio automatico con Windows (eventualmente ridotto a icona)
+  LagDoctor.exe --overlay       tiene spenti gli overlay spenti da LagDoctor (parte con Windows)
 """
 import os
 import sys
@@ -30,6 +31,9 @@ def main():
     if args[:1] == ["--gamemode"]:
         from lagdoctor import gamemode
         gamemode.main()
+    elif args[:1] == ["--overlay"]:
+        from lagdoctor import tweaks, overlays  # noqa: F401 (tweaks prima: registra le voci degli overlay)
+        overlays.guard_main()
     elif args[:1] == ["--timer"]:
         from lagdoctor import extra_tweaks
         units = int(args[1]) if len(args) > 1 and args[1].isdigit() else 5000

@@ -1,3 +1,14 @@
+## LagDoctor 5.18.0
+
+- Overlays: un overlay spento da LagDoctor ora RESTA spento, anche dopo il riavvio del PC. Un piccolo processo
+  invisibile (attivita' "LagDoctor Overlay", parte all'accesso solo se c'e' almeno un overlay spento da LagDoctor):
+  - richiude entro pochi secondi gli overlay che si riaprono (NVIDIA, AMD, RivaTuner, Overwolf);
+  - rimette l'impostazione se Steam, l'app EA o Ubisoft Connect la riaccendono (appena il programma viene chiuso).
+  Riaccendendo l'interruttore l'overlay torna come prima; quando non resta nessun overlay spento il processo si ferma.
+- Overlay spento dal suo programma (non da LagDoctor): l'interruttore non e' piu' bloccato. Se l'overlay si
+  riaccende, l'interruttore torna acceso e si puo' spegnere da LagDoctor.
+- Nuovo stato "spento da LagDoctor".
+
 ## LagDoctor 5.17.3
 
 - Overlays: l'interruttore ora mostra l'overlay stesso. Acceso = overlay acceso; per spegnerlo spegni l'interruttore

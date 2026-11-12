@@ -871,7 +871,7 @@ def _auto_exit():
 
 def _startup_repairs():
     """Dopo l'installazione o un aggiornamento: rimette a posto gli avvii automatici e riavvia la game mode."""
-    for fn in (gamemode.recover, gamemode.ensure_running, _repair_timer, settings.repair):
+    for fn in (gamemode.recover, gamemode.ensure_running, _repair_timer, settings.repair, overlays.guard_repair):
         try:
             fn()
         except Exception:

@@ -53,6 +53,8 @@ def main():
         if "timer_res" in tweaks.applied_by_us():
             print("Timer Resolution:", tweaks.revert_one("timer_res"))
         tweaks.run(["schtasks", "/Delete", "/TN", extra_tweaks.TIMER_TASK, "/F"])
+        from lagdoctor import overlays
+        overlays.guard_remove()  # il guardiano degli overlay parte da LagDoctor.exe
         from lagdoctor import settings
         tweaks.run(["schtasks", "/Delete", "/TN", settings.TASK, "/F"])  # avvio con Windows
     elif args[:1] == ["--verifica"]:
@@ -60,7 +62,8 @@ def main():
         import importlib
         from lagdoctor import paths
         for m in ("server", "gamemode", "capture", "stutter", "analysis", "tweaks", "extra_tweaks", "driver_tweaks",
-                  "gpu_driver", "scan", "checks", "updater", "cputopo", "games", "virt_tweak", "tray", "settings"):
+                  "gpu_driver", "scan", "checks", "updater", "cputopo", "games", "virt_tweak", "tray", "settings",
+                  "overlays"):
             importlib.import_module("lagdoctor." + m)
         from lagdoctor import server, capture, __version__
         need = [os.path.join(server.UI_DIR, f) for f in ("index.html", "app.js", "style.css")]

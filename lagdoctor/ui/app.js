@@ -286,7 +286,7 @@ function statusBadge(t) {
 const riskCls = ["b-ok", "b-acc", "b-warn", "b-bad"];
 const effCls = { alta: "b-ok", media: "b-ok", bassa: "", comfort: "", dubbia: "b-warn", sconsigliata: "b-bad" };
 /* si puo' spuntare solo cio' che non e' gia' attivo */
-const selectable = (t) => t.kind === "overlay" ? (!t.ignored && !t.manual && (!isOn(t) || (t.running && t.running.length > 0)))
+const selectable = (t) => t.kind === "overlay" ? (!t.ignored && !t.manual && !t.applied && (!isOn(t) || (t.running && t.running.length > 0)))
   : !isOn(t) && !t.ignored && !t.manual;
 const OV_CAT = "Overlays";
 
@@ -397,6 +397,7 @@ function dotsHtml(t) {
 function stateHtml(t) {
   if (t.kind === "overlay") {
     if (S.sel.has(t.id)) return '<span class="badge b-acc">da spegnere</span>';
+    if (t.applied) return '<span class="badge b-ok" title="LagDoctor lo tiene spento anche dopo il riavvio">spento da LagDoctor</span>';
     if (S.booting && t.status == null) return '<span class="badge">in lettura...</span>';
     if (t.running && t.running.length) return '<span class="badge b-warn" title="in esecuzione adesso">attivo ora</span>';
     if (t.status === false) return '<span class="badge b-warn">acceso</span>';
@@ -425,15 +426,15 @@ function switchHtml(t) {
   return `<label class="switch${S.sel.has(t.id) ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
 }
 /* overlay: l'interruttore mostra l'OVERLAY (acceso = l'overlay e' acceso). Spegnendolo lo si seleziona per Applica. */
-const ovOn = (t) => !isOn(t) || (t.running && t.running.length > 0);
+/* spento da LagDoctor = resta spento (lo tiene spento il guardiano anche se per un attimo si riapre) */
+const ovOn = (t) => !t.applied && (!isOn(t) || (t.running && t.running.length > 0));
 function ovSwitchHtml(t) {
   const pend = S.sel.has(t.id), on = ovOn(t) && !pend;
   let tip, dis = false;
   if (t.ignored) { dis = true; tip = "Voce ignorata"; }
   else if (pend) tip = "Verra' spento quando premi Applica (riaccendi l'interruttore per annullare)";
-  else if (t.applied && !ovOn(t)) tip = "Spento da LagDoctor: riaccendi per rimetterlo come prima";
-  else if (t.applied) tip = "Spento da LagDoctor ma si e' riaperto: spegni l'interruttore e premi Applica per richiuderlo";
-  else if (!ovOn(t)) { dis = true; tip = "Gia' spento (dal programma o da Windows)"; }
+  else if (t.applied) tip = "Spento da LagDoctor (resta spento): riaccendi per rimetterlo come prima";
+  else if (!ovOn(t)) tip = "Spento dal programma: se si riaccende, qui l'interruttore torna acceso e potrai spegnerlo da LagDoctor";
   else tip = "Spegni l'interruttore e premi Applica per spegnere questo overlay";
   return `<label class="switch${pend ? " pend" : ""}" title="${tip}"><input type="checkbox" data-sw="${t.id}" ${on ? "checked" : ""} ${dis ? "disabled" : ""}><span></span></label>`;
 }
@@ -477,8 +478,8 @@ function renderTweaks() {
   const allMyth = scope.length && scope.every((t) => t.kind === "myth");
   const ovs = S.twCat === OV_CAT ? scope.filter((t) => t.kind === "overlay") : [];
   if (ovs.length) {
-    const acc = ovs.filter((t) => t.status === false || (t.running && t.running.length)).length;
-    const off = ovs.filter((t) => t.status === true && !(t.running && t.running.length)).length, unk = ovs.length - acc - off;
+    const acc = ovs.filter((t) => !t.applied && (t.status === false || (t.running && t.running.length))).length;
+    const off = ovs.filter((t) => t.applied || (t.status === true && !(t.running && t.running.length))).length, unk = ovs.length - acc - off;
     $("#pan-s").textContent = `Overlay installati: ${acc} ${acc === 1 ? "acceso" : "accesi"}, ${off} ${off === 1 ? "spento" : "spenti"}` +
       (unk ? `, ${unk} da controllare` : "") + (fname ? ` · ${list.length} ${fname}` : "");
   } else $("#pan-s").textContent = (allMyth ? `${scope.length} voci · ${scope.filter(isOn).length} attive sul tuo PC` : `${scope.filter((t) => isOn(t) && t.kind !== "myth").length} attive su ${sTot}`) + (fname ? ` · ${list.length} ${fname}` : "") +
@@ -509,9 +510,9 @@ function renderTweaks() {
     if (!t) return;
     if (t.kind === "overlay") {
       if (S.sel.has(id)) S.sel.delete(id);                                  // riacceso prima di applicare
-      else if (t.applied && !ovOn(t)) { e.target.checked = false; return revertIds([id]); }  // riaccendo
-      else if (ovOn(t) && !t.ignored && !t.manual) S.sel.add(id);  // da spegnere (o da richiudere se si e' riaperto)
-      else e.target.checked = ovOn(t);
+      else if (t.applied) { e.target.checked = false; return revertIds([id]); }  // riaccendo (lo rimetto come prima)
+      else if (ovOn(t) && !t.ignored && !t.manual) S.sel.add(id);  // da spegnere
+      else { e.target.checked = false; toast("Questo overlay l'hai spento dal suo programma: e' gia' spento. Se si riaccende, qui l'interruttore torna acceso e potrai spegnerlo da LagDoctor.", 6000); }
       return renderTweaks();
     }
     if (t.applied) { e.target.checked = true; return revertIds([id]); }

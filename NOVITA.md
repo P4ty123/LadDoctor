@@ -1,3 +1,8 @@
+## LagDoctor 5.19.1
+
+- Game mode, "Cosa fa durante il gioco": ogni voce mostra solo il nome; spiegazione, possibili problemi e cosa ha
+  deciso LagDoctor per il tuo PC si aprono con il pulsante "dettagli".
+
 ## LagDoctor 5.19.0
 
 - Game mode, nuove opzioni:

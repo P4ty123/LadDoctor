@@ -723,14 +723,16 @@ async function gamemodePage(scanAgain) {
       <button class="ghost" data-rm="${esc(g.id)}" title="Togli dall'elenco">&times;</button>
     </div>`).join("") : '<div class="empty">Nessun gioco trovato. Usa "Aggiungi un gioco" mentre il gioco e\' aperto.</div>'}
     <h2>Cosa fa durante il gioco</h2>
-    ${r.options.map((o) => `<div class="list-row" style="align-items:flex-start">
+    ${r.options.map((o) => `<div class="list-row gm-opt">
       <label class="switch"><input type="checkbox" data-opt="${o.id}" ${c.opts[o.id] ? "checked" : ""}><span></span></label>
-      <div class="grow"><b>${esc(o.name)}</b>${o.default ? "" : ' <span class="badge">facoltativa</span>'}
+      <div class="grow"><div class="gm-opt-head"><span class="grow"><b>${esc(o.name)}</b>${o.default ? "" : ' <span class="badge">facoltativa</span>'}</span>
+        <button class="ghost sm" data-optdoc="${o.id}">${S.gmOpen && S.gmOpen.has(o.id) ? "▴ chiudi" : "▾ dettagli"}</button></div>
+        <div class="gm-opt-doc" id="optdoc-${o.id}" ${S.gmOpen && S.gmOpen.has(o.id) ? "" : "hidden"}>
         <div class="mut" style="font-size:13px">${esc(o.what)}</div>
         ${o.id === "affinity" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Il tuo processore${r.cpu && r.cpu.cpu ? " (" + esc(r.cpu.cpu) + ")" : ""}:</b> ${r.cpu ? (r.cpu.apply ? "<b>affinita' utile</b>, verra' applicata. " : "<b>affinita' non utile</b>, non verra' applicata. ") + esc(r.cpu.why || "") : "non leggibile."}</div>` : ""}
         ${o.id === "eco_bg" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Il tuo processore${r.cpu && r.cpu.cpu ? " (" + esc(r.cpu.cpu) + ")" : ""}:</b> ${r.eco ? (r.eco.apply ? "<b>modalita' efficienza utile</b>, verra' usata. " : "<b>non serve</b>, resta la priorita' bassa. ") + esc(r.eco.why || "") : "non leggibile."}</div>` : ""}
         ${o.id === "gpu_pref" ? `<div style="font-size:13px;margin-top:6px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12)"><b>Schede video di questo PC:</b> ${r.gpus && r.gpus.length ? esc(r.gpus.join(", ")) : "non leggibili"}. ${r.gpus && r.gpus.length >= 2 ? "<b>Due schede video</b>: l'opzione serve." : "<b>Una sola scheda video</b>: anche accesa non fa niente."}</div>` : ""}
-        <div style="font-size:12px;margin-top:3px"><b>Possibili problemi:</b> <span class="mut">${esc(o.risk)}</span></div></div></div>`).join("")}
+        <div style="font-size:12px;margin-top:3px"><b>Possibili problemi:</b> <span class="mut">${esc(o.risk)}</span></div></div></div></div>`).join("")}
     <p class="mut" style="font-size:12px">Niente priorita' "In tempo reale": puo' bloccare mouse, tastiera e audio.</p>`;
 
   const post = async (body, msg) => {
@@ -746,6 +748,13 @@ async function gamemodePage(scanAgain) {
   $$("[data-on]").forEach((x) => x.onchange = () => post({ action: "game", id: x.dataset.on, on: x.checked }));
   $$("[data-prio]").forEach((x) => x.onchange = () => post({ action: "game", id: x.dataset.prio, priority: x.value }, "Priorita' salvata"));
   $$("[data-opt]").forEach((x) => x.onchange = () => post({ action: "opt", id: x.dataset.opt, value: x.checked }));
+  /* dettagli di ogni opzione: si aprono e chiudono senza ricaricare la pagina */
+  $$("[data-optdoc]").forEach((btn) => btn.onclick = () => {
+    S.gmOpen = S.gmOpen || new Set();
+    const id = btn.dataset.optdoc, box = $("#optdoc-" + id), open = box.hidden;
+    box.hidden = !open; btn.textContent = open ? "▴ chiudi" : "▾ dettagli";
+    if (open) S.gmOpen.add(id); else S.gmOpen.delete(id);
+  });
   $$("[data-rm]").forEach((x) => x.onclick = () => post({ action: "remove", id: x.dataset.rm }, "Tolto dall'elenco"));
   const nav = $("#nav-gm"); if (nav) nav.hidden = !st.active;
   S.gmGames = (st.games || []).join(", ");

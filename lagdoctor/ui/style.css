@@ -288,3 +288,8 @@ details summary{cursor:pointer;color:var(--mut);margin:18px 0 8px}
 .how-btn{min-width:0}
 .doc .lead{grid-column:1/-1;margin:0 0 4px;color:var(--fg);font-weight:600;font-size:13.5px}
 .switch.pend input:not(:checked)+span{outline:1px dashed rgba(0,212,255,.8);outline-offset:2px}
+.gm-opt{align-items:flex-start}
+.gm-opt .switch{margin-top:1px}
+.gm-opt-head{display:flex;align-items:center;gap:10px}
+.gm-opt-head button{flex:none;font-size:12px;padding:4px 10px}
+.gm-opt-doc{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}

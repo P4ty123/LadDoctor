@@ -1,3 +1,14 @@
+## LagDoctor 5.21.5
+
+- "Escludi la cartella dei giochi da Defender":
+  - Non esclude piu' cartelle troppo ampie: un disco intero (es. C:\), Windows, Programmi, ProgramData, Utenti,
+    il profilo utente e AppData. Prima la cartella proposta era quella sopra l'ultimo gioco analizzato e, con un
+    gioco in C:\Gioco o in C:\Programmi\Gioco, poteva essere l'intero disco C: o tutta la cartella Programmi.
+  - Se la cartella era gia' esclusa prima (da te o da un altro programma), "Annulla" non la toglie piu'.
+  - Se Defender rifiuta di togliere l'esclusione, ora viene segnalato invece di risultare "annullata".
+  - Lettura dello stato: la risposta di Defender "N/A: serve l'amministratore" non viene piu' scambiata per una
+    cartella, e le esclusioni scritte con variabili (es. %USERPROFILE%\Giochi) vengono riconosciute.
+
 ## LagDoctor 5.21.4
 
 - "Preferisci IPv4 a IPv6": il valore di Windows usato (DisabledComponents) contiene piu' impostazioni IPv6

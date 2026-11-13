@@ -366,13 +366,25 @@ class DefenderExclusionTweak(Tweak):
         super().__init__(*a, **kw)
         self.path = None  # impostato dall'interfaccia prima di apply
 
-    def status(self):
-        """Attiva se almeno una cartella di giochi trovata sul PC e' gia' esclusa da Defender (da chiunque)."""
+    @staticmethod
+    def exclusions():
+        """Cartelle escluse da Defender (normalizzate), oppure None se non leggibili."""
         code, out = ps("(Get-MpPreference -ErrorAction Stop).ExclusionPath; 'FINE'", timeout=30)
         if "FINE" not in out:
             return None
-        excl = [os.path.normcase(l.strip().rstrip("\\")) for l in out.splitlines()
-                if l.strip() and l.strip() != "FINE" and ":" in l]
+        lines = [l.strip() for l in out.splitlines() if l.strip() and l.strip() != "FINE"]
+        # Senza diritti di amministratore Defender risponde "N/A: Must be an administrator to view exclusions"
+        if any(l.upper().startswith("N/A") for l in lines):
+            return None
+        # solo percorsi veri (C:\..., \\server\...); %VARIABILI% di Windows espanse come fa Defender
+        paths = [os.path.expandvars(l) for l in lines]
+        return [os.path.normcase(x.rstrip("\\/")) for x in paths if re.match(r"^([A-Za-z]:|\\\\)", x)]
+
+    def status(self):
+        """Attiva se almeno una cartella di giochi trovata sul PC e' gia' esclusa da Defender (da chiunque)."""
+        excl = self.exclusions()
+        if excl is None:
+            return None
         try:
             from . import games
             dirs = [os.path.normcase(g["dir"]) for g in games.detect() if g.get("dir")]
@@ -384,16 +396,46 @@ class DefenderExclusionTweak(Tweak):
             return None
         return any(d == e or d.startswith(e + os.sep) for d in dirs for e in excl)
 
+    @staticmethod
+    def too_generic(path):
+        """Motivo per cui la cartella e' troppo ampia da escludere, oppure None."""
+        p = os.path.normcase(os.path.abspath(path)).rstrip("\\/")
+        if re.match(r"^[a-z]:$", p, re.I) or re.match(r"^\\\\[^\\]+\\[^\\]+$", p):
+            return "e' un disco intero"
+        env = os.environ.get
+        risky = [env("SystemRoot"), env("ProgramFiles"), env("ProgramFiles(x86)"), env("ProgramW6432"),
+                 env("ProgramData"), env("USERPROFILE"), env("APPDATA"), env("LOCALAPPDATA"), env("TEMP"),
+                 os.path.join(os.path.splitdrive(env("SystemRoot") or "C:")[0] + os.sep, "Users")]
+        for r in filter(None, risky):
+            r = os.path.normcase(os.path.abspath(r)).rstrip("\\/")
+            if p == r:
+                return "e' una cartella di sistema (%s)" % r
+            if r == os.path.normcase(os.path.abspath(env("SystemRoot") or "")) and p.startswith(r + os.sep):
+                return "e' dentro la cartella di Windows"
+        return None
+
     def apply(self):
         if not self.path or not os.path.isdir(self.path):
             raise RuntimeError("cartella non valida")
-        code, out = ps("Add-MpPreference -ExclusionPath '%s'" % self.path.replace("'", "''"))
-        if code != 0:
-            raise RuntimeError(out[-300:])
-        return {"path": self.path}
+        path = os.path.abspath(self.path)
+        why = self.too_generic(path)
+        if why:
+            raise RuntimeError("non escludo %s: %s. Scegli la cartella che contiene solo i giochi "
+                               "(es. ...\\steamapps\\common)." % (path, why))
+        excl = self.exclusions() or []
+        existed = os.path.normcase(path.rstrip("\\/")) in excl
+        if not existed:
+            code, out = ps("Add-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % path.replace("'", "''"))
+            if code != 0:
+                raise RuntimeError(out[-300:] or "Defender ha rifiutato la modifica")
+        return {"path": path, "existed": existed}
 
     def revert(self, backup):
-        ps("Remove-MpPreference -ExclusionPath '%s'" % backup["path"].replace("'", "''"))
+        if backup.get("existed"):
+            return  # c'era gia' prima di LagDoctor: non la tolgo
+        code, out = ps("Remove-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % backup["path"].replace("'", "''"))
+        if code != 0:
+            raise RuntimeError(out[-300:] or "Defender ha rifiutato la modifica")
 
 
 def _nagle_values():

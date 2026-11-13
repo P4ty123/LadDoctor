@@ -48,7 +48,10 @@ class _NvBin(ctypes.Structure):
 
 
 class _NvVal(ctypes.Union):
-    _fields_ = [("u32", ctypes.c_uint32), ("bin", _NvBin), ("wsz", ctypes.c_uint16 * 2048), ("u64", ctypes.c_uint64)]
+    # Come in nvapi.h: solo u32 / binario / stringa. Un campo a 64 bit qui allineerebbe l'unione a 8 byte e
+    # sposterebbe "current" di 4 byte (offset 8224 invece di 8220): si leggerebbero e scriverebbero valori sbagliati
+    # (es. 'Prediligi prestazioni massime' letto come 0 = Adattiva).
+    _fields_ = [("u32", ctypes.c_uint32), ("bin", _NvBin), ("wsz", ctypes.c_uint16 * 2048)]
 
 
 class NVDRS_SETTING(ctypes.Structure):
@@ -58,6 +61,7 @@ class NVDRS_SETTING(ctypes.Structure):
                 ("isPredefinedValid", ctypes.c_uint32), ("predef", _NvVal), ("current", _NvVal)]
 
 
+assert ctypes.sizeof(NVDRS_SETTING) == 12320 and NVDRS_SETTING.current.offset == 8220, "layout NVDRS_SETTING_V1 errato"
 NVDRS_SETTING_VER = ctypes.sizeof(NVDRS_SETTING) | (1 << 16)
 
 

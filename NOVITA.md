@@ -1,3 +1,10 @@
+## LagDoctor 5.21.2
+
+- Pannello di controllo NVIDIA: corretta la struttura usata per leggere e scrivere le impostazioni del driver
+  (era spostata di 4 byte rispetto a quella ufficiale NVAPI). Le voci del driver NVIDIA potevano risultare non
+  attive anche se impostate nel Pannello (es. "Gestione energia: Prediligi prestazioni massime" letta come
+  "Adattiva"). Inoltre, quando le applicava LagDoctor, il valore veniva scritto in modo sbagliato nel driver.
+
 ## LagDoctor 5.21.1
 
 Collaudo automatico di tutte le voci (applica -> risulta attiva -> annulla -> tutto come prima) su un Windows

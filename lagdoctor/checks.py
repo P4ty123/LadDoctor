@@ -36,7 +36,7 @@ def _ps(command, timeout=20):
     try:
         out = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
-            capture_output=True, text=True, timeout=timeout, creationflags=CREATE_NO_WINDOW)
+            capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=timeout, creationflags=CREATE_NO_WINDOW)
         return out.stdout.strip() or None
     except Exception:
         return None
@@ -87,7 +87,7 @@ def cpu_name():
 
 def power_plan():
     try:
-        out = subprocess.run(["powercfg", "/getactivescheme"], capture_output=True, text=True,
+        out = subprocess.run(["powercfg", "/getactivescheme"], capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace",
                              timeout=10, creationflags=CREATE_NO_WINDOW).stdout
         return out.split("(")[-1].rstrip(") \r\n") if "(" in out else out.strip()
     except Exception:

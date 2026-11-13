@@ -5,6 +5,7 @@
   gli stessi usati dal Task Manager (utilizzo GPU e VRAM usata).
 """
 import ctypes
+import os
 import re
 import subprocess
 import threading
@@ -79,7 +80,7 @@ def gpu_info():
     try:
         out = subprocess.run(
             ["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=10, creationflags=CREATE_NO_WINDOW)
+            capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=10, creationflags=CREATE_NO_WINDOW)
         name, drv, mem = [x.strip() for x in out.stdout.strip().splitlines()[0].split(",")]
         return {"name": name, "vendor": "nvidia", "driver": drv, "vram_mb": int(float(mem))}
     except Exception:
@@ -109,7 +110,7 @@ class NvidiaMonitor(threading.Thread):
             try:
                 r = subprocess.run(["nvidia-smi", "--query-gpu=" + self.BASE + extra,
                                     "--format=csv,noheader,nounits"],
-                                   capture_output=True, text=True, timeout=10, creationflags=CREATE_NO_WINDOW)
+                                   capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=10, creationflags=CREATE_NO_WINDOW)
                 if r.returncode == 0 and r.stdout.strip():
                     self.fields = self.BASE + extra
                     break
@@ -122,7 +123,7 @@ class NvidiaMonitor(threading.Thread):
             return
         self.proc = subprocess.Popen(
             ["nvidia-smi", "--query-gpu=" + self.fields, "--format=csv,noheader,nounits", "-lms", "500"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, creationflags=CREATE_NO_WINDOW)
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", creationflags=CREATE_NO_WINDOW)
         for line in self.proc.stdout:
             parts = [p.strip() for p in line.split(",")]
             try:

@@ -31,7 +31,7 @@ def ps(command, timeout=60):
     """PowerShell: restituisce (codice_uscita, output)."""
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
-                           capture_output=True, text=True, timeout=timeout, creationflags=CREATE_NO_WINDOW)
+                           capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=timeout, creationflags=CREATE_NO_WINDOW)
         return r.returncode, (r.stdout + r.stderr).strip()
     except Exception as e:
         return 1, str(e)
@@ -39,7 +39,7 @@ def ps(command, timeout=60):
 
 def run(args, timeout=60):
     try:
-        r = subprocess.run(args, capture_output=True, text=True, timeout=timeout, creationflags=CREATE_NO_WINDOW)
+        r = subprocess.run(args, capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=timeout, creationflags=CREATE_NO_WINDOW)
         return r.returncode, (r.stdout + r.stderr).strip()
     except Exception as e:
         return 1, str(e)
@@ -309,7 +309,10 @@ class BcdTweak(Tweak):
         for line in out.splitlines():
             parts = line.split()
             if parts and parts[0].lower() == self.option:
-                return parts[-1].lower() in ("yes", "si", "sì", "true", self.value.lower())
+                v, want = parts[-1].lower(), self.value.lower()
+                if want in ("yes", "true"):  # bcdedit in italiano scrive "Si'" (anche con l'accento rovinato)
+                    return v in ("yes", "true") or v.startswith("s")
+                return v == want
         return False
 
     def apply(self):
@@ -1479,7 +1482,10 @@ ACTIVE_CHECKS = {
                               or _int(r("HKU", r"S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings",
                                         "DownloadMode"), -1) == 0,
     # telemetria: 0 o 1 (su Home/Pro lo 0 vale come 1) + pubblicita' personalizzata spenta
-    "telemetry_policy": lambda r: _int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"), 3) <= 1
+    # AllowTelemetry: Windows lo legge sia dai Criteri di gruppo sia da CurrentVersion\Policies (dove lo scrive LagDoctor)
+    "telemetry_policy": lambda r: min(_int(r("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"), 3),
+                                      _int(r("HKLM", r"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection",
+                                             "AllowTelemetry"), 3)) <= 1
                                   and _int(r("HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"), 1) == 0,
     # SystemResponsiveness: 10 o meno (0 ha lo stesso effetto, anzi piu' forte)
     "sys_resp": lambda r: _int(r("HKLM", r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",

@@ -1,3 +1,14 @@
+## LagDoctor 5.21.1
+
+Collaudo automatico di tutte le voci (applica -> risulta attiva -> annulla -> tutto come prima) su un Windows
+simulato: 108 voci di Windows e 25 dei driver NVIDIA/AMD. Correzioni trovate:
+- "Telemetria e pubblicita' al minimo": applicata da LagDoctor risultava non attiva (l'impostazione veniva scritta
+  in una posizione del registro e controllata in un'altra). Ora controlla entrambe.
+- Windows in italiano: i comandi che scrivono lettere accentate (bcdedit "Si'", powercfg...) potevano non essere
+  letti e la voce risultava "?". Ora l'output dei comandi viene letto con la codifica giusta.
+- "Disattiva dynamic tick", "Disattiva l'hypervisor" e "Forza HPET": riconoscono il "Si'" di bcdedit in italiano.
+- Verifica completa: per le voci "?" mostra il motivo vero (es. "Prestazioni migliori": serve il piano Bilanciato).
+
 ## LagDoctor 5.21.0
 
 - Nuova "Verifica completa" (Impostazioni > Verifica completa > Apri): controlla una per una tutte le ottimizzazioni,

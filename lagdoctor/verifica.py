@@ -117,7 +117,8 @@ def verdict(t, status, applied_info):
     if status is True:
         return "ok", "attiva" + (" (applicata da LagDoctor)" if applied else " (gia' impostata su Windows)")
     if status is None:
-        return ("unk" if not applied else "unk"), "Windows non permette di leggerla" + (" (applicata da LagDoctor)" if applied else "")
+        why = getattr(t, "note", None) or "Windows non permette di leggerla"
+        return "unk", why + (" (applicata da LagDoctor)" if applied else "")
     if applied:
         if t.reboot and _applied_after_boot(applied_info):
             return "reboot", "applicata: funziona dopo il riavvio di Windows"

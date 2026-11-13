@@ -361,7 +361,7 @@ MYTHS_TWEAKS = [
     _myth(CmdTweak, "myth_hpet_on", "Forza HPET (bcdedit useplatformclock)",
           "Obbliga Windows a usare il timer HPET della scheda madre.", risk=2, reboot=True, group="hpet",
           on="bcdedit /set '{current}' useplatformclock true", off="bcdedit /deletevalue '{current}' useplatformclock",
-          check="[bool]((bcdedit /enum '{current}') -match 'useplatformclock\\s+(Yes|Si|Sì)')"),
+          check="[bool]((bcdedit /enum '{current}') -match 'useplatformclock\\s+(Yes|True|S)')"),
     _myth(CmdTweak, "myth_autotuning_off", "Disattiva TCP Auto-Tuning", "Blocca l'adattamento della finestra TCP.",
           group="autotune", on="netsh int tcp set global autotuninglevel=disabled",
           off="netsh int tcp set global autotuninglevel=normal",

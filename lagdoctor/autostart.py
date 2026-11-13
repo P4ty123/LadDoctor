@@ -231,7 +231,7 @@ def _tasks():
 def _ps(script, timeout=180):
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True,
-                           text=True, timeout=timeout, creationflags=CREATE_NO_WINDOW)
+                           text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=timeout, creationflags=CREATE_NO_WINDOW)
         return r.returncode, (r.stdout or "").strip(), (r.stderr or "").strip()
     except Exception as e:
         return 1, "", str(e)

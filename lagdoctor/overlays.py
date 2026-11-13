@@ -475,7 +475,7 @@ CREATE_NO_WINDOW = 0x08000000
 
 def _run(args):
     try:
-        r = subprocess.run(args, capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW)
+        r = subprocess.run(args, capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=30, creationflags=CREATE_NO_WINDOW)
         return r.returncode, (r.stdout + r.stderr).strip()
     except Exception as e:
         return 1, str(e)

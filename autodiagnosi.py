@@ -529,7 +529,7 @@ def t_presentmon():
     th = threading.Thread(target=_spinner, args=(stop,), daemon=True)  # fa ridisegnare lo schermo: crea frame
     th.start()
     t0 = time.time()
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=40)
     stop.set()
     th.join()
     d = {"exe": pm, "codice": r.returncode, "secondi": round(time.time() - t0, 1),
@@ -568,11 +568,11 @@ def t_presentmon_stop():
     p = subprocess.Popen([pm, "--process_id", str(dwm.pid), "--output_file", csv_path, "--timed", "60",
                           "--terminate_after_timed", "--no_console_stats", "--stop_existing_session",
                           "--session_name", "LagDoctorAutoTest"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace")
     time.sleep(3)
     t0 = time.time()
     r = subprocess.run([pm, "--terminate_existing_session", "--session_name", "LagDoctorAutoTest"],
-                       capture_output=True, text=True, timeout=15)
+                       capture_output=True, text=True, encoding=("oem" if os.name == "nt" else None), errors="replace", timeout=15)
     try:
         p.wait(timeout=10)
         stopped = True

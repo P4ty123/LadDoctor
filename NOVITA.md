@@ -1,3 +1,12 @@
+## LagDoctor 5.21.3
+
+- AMD Software Adrenalin: controllate tutte le chiamate ADLX con gli header ufficiali AMD. Corretti tre errori:
+  - "Radeon Super Resolution" e "AMD Fluid Motion Frames" venivano chiesti passando anche la scheda video, ma
+    queste due funzioni non la vogliono: il driver scriveva il risultato dentro i dati della scheda (memoria
+    corrotta, possibili chiusure improvvise) e le due voci risultavano sempre "non supportate".
+  - AMD Fluid Motion Frames e il livello di Anti-Lag esistono solo nei driver recenti: ora vengono chiesti nel
+    modo previsto da AMD (QueryInterface). Prima, con un driver vecchio, LagDoctor poteva chiudersi.
+
 ## LagDoctor 5.21.2
 
 - Pannello di controllo NVIDIA: corretta la struttura usata per leggere e scrivere le impostazioni del driver

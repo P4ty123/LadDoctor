@@ -303,7 +303,15 @@ ADLX_VT = {
                                 "GetImageSharpening", "GetEnhancedSync", "GetWaitForVerticalRefresh",
                                 "GetFrameRateTargetControl", "GetAntiAliasing", "GetMorphologicalAntiAliasing",
                                 "GetAnisotropicFiltering", "GetTessellation", "GetRadeonSuperResolution",
-                                "GetResetShaderCache", "Get3DSettingsChangedHandling", "GetAMDFluidMotionFrames"],
+                                "GetResetShaderCache", "Get3DSettingsChangedHandling"],
+    # Estensioni: esistono solo nei driver piu' recenti e si ottengono con QueryInterface (I3DSettings1.h,
+    # I3DSettings.h). Chiamarle sull'interfaccia base leggerebbe oltre la fine della vtable sui driver vecchi.
+    "IADLX3DSettingsServices1": ["Acquire", "Release", "QueryInterface", "GetAntiLag", "GetChill", "GetBoost",
+                                 "GetImageSharpening", "GetEnhancedSync", "GetWaitForVerticalRefresh",
+                                 "GetFrameRateTargetControl", "GetAntiAliasing", "GetMorphologicalAntiAliasing",
+                                 "GetAnisotropicFiltering", "GetTessellation", "GetRadeonSuperResolution",
+                                 "GetResetShaderCache", "Get3DSettingsChangedHandling", "GetAMDFluidMotionFrames"],
+    "IADLX3DAntiLag": ["Acquire", "Release", "QueryInterface", "IsSupported", "IsEnabled", "SetEnabled"],
     "IADLX3DAntiLag1": ["Acquire", "Release", "QueryInterface", "IsSupported", "IsEnabled", "SetEnabled", "GetLevel",
                         "SetLevel"],
     "IADLX3DChill": ["Acquire", "Release", "QueryInterface", "IsSupported", "IsEnabled", "GetFPSRange", "GetMinFPS",
@@ -339,10 +347,19 @@ class _Obj:
         idx = ADLX_VT[self.iface].index(method)
         vtbl = ctypes.cast(ctypes.cast(self.ptr, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
         # valori semplici con il loro tipo, tutto il resto (puntatori, byref, handle) come void*
-        simple = (ctypes.c_int, ctypes.c_uint, ctypes.c_uint8, ctypes.c_long)
+        simple = (ctypes.c_int, ctypes.c_uint, ctypes.c_uint8, ctypes.c_long, ctypes.c_wchar_p)
         argtypes = [ctypes.c_void_p] + [type(a) if isinstance(a, simple) else ctypes.c_void_p for a in args]
         fn = ctypes.CFUNCTYPE(restype, *argtypes)(vtbl[idx])  # su x64 stdcall e cdecl coincidono
         return fn(self.ptr, *args)
+
+    def query(self, iface):
+        """QueryInterface verso un'interfaccia estesa; None se il driver non la ha."""
+        p = ctypes.c_void_p()
+        try:
+            r = self.call("QueryInterface", ctypes.c_wchar_p(iface), ctypes.byref(p))
+        except Exception:
+            return None
+        return _Obj(p, iface) if r in ADLX_OK_CODES and p else None
 
     def release(self):
         if self.iface != "IADLXSystem":
@@ -360,7 +377,7 @@ class Adlx:
     """Sessione ADLX sulla scheda AMD dedicata."""
 
     def __init__(self):
-        self.ok, self.error, self.gpu, self.svc, self.objs = False, None, None, None, []
+        self.ok, self.error, self.gpu, self.svc, self.svc1, self.objs = False, None, None, None, None, []
         try:
             self.dll = ctypes.CDLL("amdadlx64.dll")
             ver = ctypes.c_uint64(0)
@@ -406,8 +423,20 @@ class Adlx:
             raise RuntimeError("ADLX %s: codice %d" % (what, r))
 
     def feature(self, getter, iface):
+        svc = self.svc
+        if getter == "GetAMDFluidMotionFrames":  # solo in IADLX3DSettingsServices1
+            if self.svc1 is None:
+                self.svc1 = self.svc.query("IADLX3DSettingsServices1") or False
+                if self.svc1:
+                    self.objs.append(self.svc1)
+            if not self.svc1:
+                return None
+            svc = self.svc1
         p = ctypes.c_void_p()
-        if self.svc.call(getter, self.gpu.ptr, ctypes.byref(p)) not in ADLX_OK_CODES or not p:
+        # GetRadeonSuperResolution e GetAMDFluidMotionFrames sono globali: NON ricevono la GPU. Passarla li'
+        # farebbe scrivere al driver l'oggetto risultato dentro l'oggetto GPU (memoria corrotta).
+        args = (ctypes.byref(p),) if getter in ADLX_NO_GPU else (self.gpu.ptr, ctypes.byref(p))
+        if svc.call(getter, *args) not in ADLX_OK_CODES or not p:
             return None
         o = _Obj(p, iface)
         sup = ctypes.c_uint8(0)
@@ -435,8 +464,10 @@ class Adlx:
             pass
 
 
+ADLX_NO_GPU = {"GetRadeonSuperResolution", "GetAMDFluidMotionFrames"}
+
 AMD_FEATURES = {  # chiave: (metodo del servizio, interfaccia)
-    "antilag": ("GetAntiLag", "IADLX3DAntiLag1"), "chill": ("GetChill", "IADLX3DChill"),
+    "antilag": ("GetAntiLag", "IADLX3DAntiLag"), "chill": ("GetChill", "IADLX3DChill"),
     "boost": ("GetBoost", "IADLX3DBoost"), "sharpening": ("GetImageSharpening", "IADLX3DImageSharpening"),
     "esync": ("GetEnhancedSync", "IADLX3DEnhancedSync"), "vsync": ("GetWaitForVerticalRefresh", "IADLX3DWaitForVerticalRefresh"),
     "frtc": ("GetFrameRateTargetControl", "IADLX3DFrameRateTargetControl"),
@@ -466,7 +497,10 @@ def amd_read():
             else:
                 d["enabled"] = a.get_bool(o)
             if key == "antilag":
-                d["level"] = a.get_int(o, "GetLevel")
+                o1 = o.query("IADLX3DAntiLag1")  # livello (Anti-Lag / Anti-Lag 2) solo nei driver recenti
+                if o1:
+                    a.objs.append(o1)
+                    d["level"] = a.get_int(o1, "GetLevel")
             if key == "chill":
                 d["min"], d["max"] = a.get_int(o, "GetMinFPS"), a.get_int(o, "GetMaxFPS")
             if key == "boost":

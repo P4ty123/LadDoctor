@@ -21,6 +21,7 @@ import psutil
 from . import analysis, capture, checks, factors, fixes, gamemode, gpu_driver, paths, report, scan, sessions, tweak_docs, tweaks
 from . import overlays
 from . import autostart
+from . import verifica
 from . import __version__, pdh, settings, tray, updater
 from . import gpu as gpumod
 from .main import BACKUP, GAME_HINTS, NOT_GAMES, REPORTS, ROOT, TOOLS
@@ -428,6 +429,27 @@ def _startup_running(items):
     return items
 
 
+def job_verifica(job):
+    """Verifica completa: rilegge lo stato reale di tutte le ottimizzazioni, poi game mode e altre funzioni."""
+    job.msg("Rileggo lo stato reale di tutte le ottimizzazioni...")
+    refresh_statuses(job)
+    job.msg("Controllo le ottimizzazioni una per una...")
+    rows = verifica.check_tweaks(STATE["statuses"], vendor())
+    job.msg("Controllo la game mode...")
+    rows += verifica.check_gamemode()
+    job.msg("Controllo le altre funzioni (avvio automatico, overlay, processi)...")
+    rows += verifica.check_other()
+    text = verifica.as_text(rows, __version__)
+    name = "verifica-%s.txt" % time.strftime("%Y%m%d-%H%M%S")
+    try:
+        os.makedirs(REPORTS, exist_ok=True)
+        with open(os.path.join(REPORTS, name), "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError:
+        name = None
+    return {"rows": rows, "summary": verifica.summary(rows), "text": text, "file": name}
+
+
 def job_restore_all(job):
     msgs = tweaks.revert_all()
     try:
@@ -668,11 +690,14 @@ class Handler(BaseHTTPRequestHandler):
             job = start_job("boot", job_boot, hw)
             STATE["boot_job"] = job.id
             return 200, job.as_dict()
-        if path in ("/api/scan", "/api/apply", "/api/revert", "/api/restore_all", "/api/record", "/api/check"):
+        if path in ("/api/scan", "/api/apply", "/api/revert", "/api/restore_all", "/api/record", "/api/check",
+                    "/api/verifica"):
             if STATE["busy"] and JOBS.get(STATE["busy"]) and JOBS[STATE["busy"]].status == "running":
                 return 409, {"error": "C'e' gia' un'operazione in corso: aspetta che finisca."}
         if path == "/api/scan":
             job = start_job("scan", job_scan)
+        elif path == "/api/verifica":
+            job = start_job("verifica", job_verifica)
         elif path == "/api/check":
             job = start_job("check", lambda j: refresh_statuses(j) or catalog_json())
         elif path == "/api/apply":

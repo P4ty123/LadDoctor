@@ -1,3 +1,11 @@
+## LagDoctor 5.21.0
+
+- Nuova "Verifica completa" (Impostazioni > Verifica completa > Apri): controlla una per una tutte le ottimizzazioni,
+  la game mode e le altre funzioni (avvio con Windows, guardiano degli overlay, programmi e processi disattivati)
+  e per ognuna dice se su questo PC funziona davvero: ✔ funziona, ✘ problema (applicata ma non attiva),
+  ⟳ serve il riavvio, ○ non attiva, ? non leggibile. Mostra cosa ha letto su Windows, ha "solo problemi",
+  "Copia risultati" e salva un file nella Cartella report. Solo lettura.
+
 ## LagDoctor 5.20.5
 
 - Game mode, "Chiudi Esplora risorse": Windows lo riapriva da solo dopo pochi secondi. Ora durante il gioco viene

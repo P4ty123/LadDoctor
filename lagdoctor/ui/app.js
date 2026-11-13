@@ -45,7 +45,7 @@ function go(page) {
   main().scrollTop = 0;
   refreshState().catch(() => {});
   if (page === "record") return ({ rec: record, exp, sessions })[S.recTab || "rec"]();
-  ({ home, scan, tweaks: tweaksPage, driver, startup, gamemode: gamemodePage })[page]();
+  ({ home, scan, tweaks: tweaksPage, driver, startup, gamemode: gamemodePage, verifica: verificaPage })[page]();
 }
 $$("#nav a").forEach((a) => a.addEventListener("click", () => { if (a.dataset.page === "record") S.recTab = "rec"; go(a.dataset.page); }));
 
@@ -1211,6 +1211,7 @@ async function settingsDialog() {
     <p class="mut" style="font-size:12.5px">Chiudendo la finestra con la X, LagDoctor resta acceso tra le icone vicino all'orologio (in basso a destra). Per chiuderlo davvero: tasto destro sull'icona &gt; <b>Esci</b>, oppure il pulsante Esci qui a sinistra.</p>
     ${s.autostart && !s.task ? '<p style="color:#e8a23a;font-size:13px">L\'avvio con Windows non risulta attivo: riattivalo.</p>' : ""}
     <p class="mut" style="font-size:12px">La game mode ha un suo avvio automatico separato (pagina Game mode): funziona anche con LagDoctor chiuso.</p>
+    <div class="list-row" style="align-items:center"><div class="grow"><b>Verifica completa</b><div class="mut" style="font-size:13px">Controlla una per una tutte le ottimizzazioni, la game mode e le altre funzioni: per ognuna dice se su questo PC funziona davvero. Solo lettura, non cambia niente.</div></div><button id="set-verify">Apri</button></div>
     <div class="row" style="justify-content:flex-end"><button class="ghost" id="m-close">Chiudi</button></div>`);
   const save = async () => {
     try {
@@ -1219,11 +1220,50 @@ async function settingsDialog() {
       toast(r.autostart ? (r.minimized ? "LagDoctor partira' con Windows, ridotto a icona" : "LagDoctor partira' con Windows") : "Avvio con Windows disattivato");
     } catch (e) { toast("Errore: " + e.message); }
   };
+  $("#set-verify", m).onclick = () => { closeModal(); go("verifica"); };
   $("#set-auto", m).onchange = save;
   $("#set-min", m).onchange = save;
   $("#m-close", m).onclick = closeModal;
 }
 $("#btn-settings").onclick = settingsDialog;
+
+/* ------------------------------------------------------------------ VERIFICA COMPLETA (strumento di prova) */
+const VF_ICON = { ok: ["✔", "var(--ok)"], ko: ["✘", "var(--bad)"], reboot: ["⟳", "var(--warn)"], off: ["○", "var(--mut)"], unk: ["?", "var(--warn)"], manual: ["–", "var(--mut)"] };
+async function verificaPage() {
+  main().innerHTML = `<h1>Verifica completa</h1>
+    <p class="sub">Per ogni ottimizzazione, per la game mode e per le altre funzioni: ✔ funziona su questo PC · ✘ PROBLEMA (applicata ma non attiva) · ⟳ serve il riavvio · ○ non attiva · ? non leggibile. Solo lettura.</p>
+    <div id="vf-body"><div class="loading"><div class="spinner"></div><p id="vf-msg">Controllo tutto (1-2 minuti)...</p></div></div>`;
+  let job;
+  try {
+    job = await runJob(api("/api/verifica", {}), (j) => { const el = $("#vf-msg"); if (el && j.messages.length) el.textContent = j.messages[j.messages.length - 1]; });
+  } catch (e) { $("#vf-body").innerHTML = `<div class="empty">Errore: ${esc(e.message)}</div>`; return; }
+  const r = job.result, s = r.summary;
+  S.vfOnly = S.vfOnly || false;
+  $("#vf-body").innerHTML = `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="badge b-ok">✔ ${s.ok || 0} funzionano</span><span class="badge b-bad">✘ ${s.ko || 0} problemi</span>
+      <span class="badge b-warn">⟳ ${s.reboot || 0} da riavviare</span><span class="badge">○ ${s.off || 0} non attive</span><span class="badge b-warn">? ${s.unk || 0} non leggibili</span>
+      <span class="grow"></span><label class="chk mut" style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="vf-only" ${S.vfOnly ? "checked" : ""}> solo problemi</label>
+      <button class="ghost sm" id="vf-copy">Copia risultati</button><button class="sm" id="vf-again">Ricontrolla</button></div>
+    ${r.file ? `<p class="mut" style="font-size:12px;margin:0 0 10px">Salvata anche nella Cartella report: ${esc(r.file)}</p>` : ""}
+    <div id="vf-list"></div>`;
+  const draw = () => {
+    let g = null, html = "";
+    r.rows.filter((x) => !S.vfOnly || ["ko", "reboot", "unk"].includes(x.res)).forEach((x) => {
+      if (x.group !== g) { g = x.group; html += `<div class="grp">${esc(g)}</div>`; }
+      const [ic, col] = VF_ICON[x.res] || ["?", "var(--mut)"];
+      html += `<div class="vf-row"><span class="vf-ic" style="color:${col}">${ic}</span><div class="grow"><b>${esc(x.name)}</b> <span class="mut">— ${esc(x.msg)}</span>
+        ${(x.detail || []).length ? `<div class="vf-det">${x.detail.map(esc).join("<br>")}</div>` : ""}</div></div>`;
+    });
+    $("#vf-list").innerHTML = html || '<div class="empty">Nessun problema.</div>';
+  };
+  $("#vf-only").onchange = (e) => { S.vfOnly = e.target.checked; draw(); };
+  $("#vf-again").onclick = () => verificaPage();
+  $("#vf-copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(r.text); toast("Risultati copiati: incollali dove vuoi"); }
+    catch (e) { toast("Non riesco a copiare: apri il file nella Cartella report"); }
+  };
+  draw();
+}
 /* battito: la versione installata si chiude da sola quando chiudi la finestra */
 setInterval(() => { api("/api/ping").catch(() => {}); }, 20000);
 window.addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye?t=" + encodeURIComponent(window.LD_TOKEN), ""); } catch (e) { /* niente */ } });

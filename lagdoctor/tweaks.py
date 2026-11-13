@@ -443,6 +443,8 @@ def _nvidia_40plus(s):
     return _vendor(s) == "nvidia" and bool(re.search(r"rtx\s*(40|50)\d\d", n))
 
 
+_TCPIP6 = r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
+
 CATALOG = [
     # ------------------------------------------------------------ GIOCO
     RegTweak("game_dvr", "Gioco", "Disattiva registrazione Xbox Game Bar",
@@ -919,8 +921,11 @@ FAMOUS = [
     RegTweak("ipv4_pref", "Rete", "Preferisci IPv4 a IPv6",
              "Le connessioni usano IPv4 quando possibile. Utile se il tuo IPv6 e' instabile o 'tunnellato'; "
              "altrimenti nessun effetto.", "bassa", risk=1, reboot=True,
-             values=[("HKLM", r"SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters", "DisabledComponents",
-                      DWORD, 0x20)], recommend=lambda s: None, source="WinUtil"),
+             # DisabledComponents e' una maschera di bit (Microsoft KB929852): si aggiunge solo 0x20 = preferisci
+             # IPv4, senza cancellare gli altri bit gia' presenti (es. 0x01 tunnel IPv6 spenti).
+             values=lambda: [("HKLM", _TCPIP6, "DisabledComponents", DWORD,
+                              ((_int(reg_read("HKLM", _TCPIP6, "DisabledComponents")[0], 0) or 0) | 0x20) & 0xFFFFFFFF)],
+             recommend=lambda s: None, source="WinUtil / Microsoft KB929852"),
     CmdTweak("teredo_off", "Rete", "Disattiva Teredo",
              "Spegne il tunnel IPv6 Teredo. Alcuni giochi Xbox/Game Pass lo usano per il multiplayer: se "
              "hai problemi di NAT nell'app Xbox, annulla.", "bassa", risk=1,

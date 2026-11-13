@@ -1,3 +1,10 @@
+## LagDoctor 5.21.4
+
+- "Preferisci IPv4 a IPv6": il valore di Windows usato (DisabledComponents) contiene piu' impostazioni IPv6
+  insieme. Prima LagDoctor lo sovrascriveva con 0x20 e cancellava le altre (es. tunnel IPv6 spenti, che si
+  riaccendevano). Ora aggiunge solo "preferisci IPv4" e lascia il resto com'era; "Annulla" rimette il valore
+  esatto di prima.
+
 ## LagDoctor 5.21.3
 
 - AMD Software Adrenalin: controllate tutte le chiamate ADLX con gli header ufficiali AMD. Corretti tre errori:

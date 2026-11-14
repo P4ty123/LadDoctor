@@ -615,7 +615,7 @@ class Handler(BaseHTTPRequestHandler):
                     "boot_msg": boot.messages[-1] if boot and boot.messages else None,
                     "hw_cached": STATE.get("hw_cached", False),
                     "version": __version__, "installed": paths.FROZEN, "data_dir": paths.DATA_DIR,
-                    "gm": _gm_quick()}
+                    "gm": _gm_quick(), "animations": settings.load().get("animations", True)}
         if path == "/api/job":
             job = JOBS.get(qs.get("id", [""])[0])
             return job.as_dict() if job else {"status": "missing"}
@@ -755,7 +755,10 @@ class Handler(BaseHTTPRequestHandler):
             for k in settings.DEFAULTS:
                 if k in b:
                     d[k] = bool(b[k])
-            settings.apply(d)
+            if set(b) <= {"animations"}:  # solo l'aspetto: niente da cambiare nell'avvio con Windows
+                settings.save(d)
+            else:
+                settings.apply(d)
             return 200, settings.status()
         elif path == "/api/update/install":
             return 200, start_job("update", job_update).as_dict()

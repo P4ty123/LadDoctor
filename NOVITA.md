@@ -1,3 +1,13 @@
+## LagDoctor 5.24.0
+
+- Animazioni al cambio di scheda: la pagina vecchia scompare e la nuova entra dal basso, sia per le schede del
+  menu sia per le sotto-schede (Analizza gioco, Avvio automatico, categorie e filtri di Ottimizzazioni).
+  Si possono spegnere da Impostazioni > Animazioni (di base sono accese). Restano spente se in Windows sono
+  disattivati gli effetti di animazione.
+- Analizza gioco > Sessioni: si possono eliminare le sessioni registrate, una alla volta (cestino sulla riga) o
+  piu' insieme (Seleziona tutte / Elimina selezionate), sempre con una conferma. Vengono cancellati anche il
+  report e i dati registrati della sessione. La partita PRIMA di un test Prima / Dopo in corso non viene eliminata.
+
 ## LagDoctor 5.23.0
 
 Interfaccia rinnovata:

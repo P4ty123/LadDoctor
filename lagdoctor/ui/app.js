@@ -60,13 +60,15 @@ function logList(el, msgs) { el.innerHTML = msgs.map((m) => "<li>" + esc(m) + "<
 
 /* ------------------------------------------------------------------ navigazione */
 /* animazioni: la scheda vecchia scompare, la nuova entra dal basso (niente animazioni se Windows le ha spente) */
-const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const RM_SYS = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+/* animazioni spente da Impostazioni (S.noAnim) o da Windows */
+const noAnim = () => RM_SYS || !!S.noAnim;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* con una barra fissa dentro (.bar) solo dissolvenza: lo spostamento la farebbe saltare */
 const animCls = (el) => (el === main() || el.querySelector(".bar") || el.classList.contains("bar")) ? "fade" : "";
 function animOut(els) { els.forEach((el) => { el.classList.remove("sw-in"); el.classList.add("sw-out"); const c = animCls(el); if (c) el.classList.add(c); }); }
 function animIn(els) {
-  if (RM) return;
+  if (noAnim()) return;
   els.forEach((el, i) => {
     el.classList.remove("sw-out", "sw-in");
     const c = animCls(el); el.classList.toggle("fade", !!c);
@@ -90,7 +92,7 @@ function rendered(old, promise) {
 /* sotto-schede di Ottimizzazioni: categoria o filtro */
 async function swapTweaks(change) {
   const list = $("#tw-list");
-  if (!RM && list) { animOut([list]); await wait(110); }
+  if (!noAnim() && list) { animOut([list]); await wait(110); }
   change(); renderTweaks();
   if ($("#tw-list")) { $("#tw-list").classList.remove("sw-out"); animIn([$("#tw-list")]); }
 }
@@ -99,7 +101,7 @@ async function swapTweaks(change) {
 async function go(page, opt = {}) {
   if (page === "exp" || page === "sessions") { S.recTab = page; page = "record"; }
   const tok = S.navTok = (S.navTok || 0) + 1;
-  const anim = !RM && !opt.quiet && S.page !== undefined && main().firstElementChild;
+  const anim = !noAnim() && !opt.quiet && S.page !== undefined && main().firstElementChild;
   const sub = anim && opt.sub;
   if (anim) {
     animOut(sub ? belowTabs() : [main()]);
@@ -142,6 +144,7 @@ function bindRecTabs() {
 
 async function refreshState() {
   S.state = await api("/api/state");
+  S.noAnim = S.state.animations === false;
   if (S.state.version) $("#app-ver").textContent = "v" + S.state.version;
   const gmNav = $("#nav-gm"); if (gmNav && S.state.gm) gmNav.hidden = !S.state.gm.active;
   $("#nav-exp").hidden = !S.state.experiment;
@@ -1276,7 +1279,7 @@ async function sessions() {
         const r = await api("/api/sessions/delete", { ids });
         closeModal();
         const rows = ids.map((i) => $(`tr[data-row="${i}"]`)).filter((x) => x && !(prot && Number(x.dataset.row) === exp.prima));
-        if (!RM) { rows.forEach((x) => x.classList.add("row-out")); await wait(260); }
+        if (!noAnim()) { rows.forEach((x) => x.classList.add("row-out")); await wait(260); }
         toast(r.msg);
         if (S.lastRecord && S.lastRecord.result && ids.includes(S.lastRecord.result.session.id)) S.lastRecord = null;
         sessions();
@@ -1374,6 +1377,7 @@ async function settingsDialog() {
   const m = modal(`<h2>Impostazioni</h2>
     ${row("set-auto", "Avvia LagDoctor con Windows", "LagDoctor si apre da solo circa 15 secondi dopo l'accesso a Windows, gia' con i permessi di amministratore (nessuna richiesta di conferma). L'hardware non viene riletto: le impostazioni si controllano in background.", s.autostart)}
     ${row("set-min", "Ridotto a icona", "All'avvio con Windows LagDoctor parte solo come icona vicino all'orologio, senza aprire la finestra: clicca l'icona quando ti serve.", s.minimized, !s.autostart)}
+    ${row("set-anim", "Animazioni", "Quando cambi scheda la pagina vecchia scompare e la nuova entra con un'animazione. Spegnile per cambi di scheda istantanei." + (RM_SYS ? " <b>Ora sono spente anche da Windows</b> (Impostazioni di Windows &gt; Accessibilita' &gt; Effetti visivi &gt; Effetti di animazione)." : ""), s.animations !== false)}
     <p class="mut" style="font-size:12.5px">Chiudendo la finestra con la X, LagDoctor resta acceso tra le icone vicino all'orologio (in basso a destra). Per chiuderlo davvero: tasto destro sull'icona &gt; <b>Esci</b>, oppure il pulsante Esci qui a sinistra.</p>
     ${s.autostart && !s.task ? '<p style="color:#e8a23a;font-size:13px">L\'avvio con Windows non risulta attivo: riattivalo.</p>' : ""}
     <p class="mut" style="font-size:12px">La game mode ha un suo avvio automatico separato (pagina Game mode): funziona anche con LagDoctor chiuso.</p>
@@ -1389,6 +1393,11 @@ async function settingsDialog() {
   $("#set-verify", m).onclick = () => { closeModal(); go("verifica"); };
   $("#set-auto", m).onchange = save;
   $("#set-min", m).onchange = save;
+  $("#set-anim", m).onchange = async (e) => {
+    const on = e.target.checked;
+    try { await api("/api/settings", { animations: on }); S.noAnim = !on; toast(on ? "Animazioni attivate" : "Animazioni disattivate"); }
+    catch (err) { e.target.checked = !on; toast("Errore: " + err.message); }
+  };
   $("#m-close", m).onclick = closeModal;
 }
 $("#btn-settings").onclick = settingsDialog;

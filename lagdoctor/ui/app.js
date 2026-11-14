@@ -737,7 +737,7 @@ async function applySelected(ids, after) {
       const ko = res.filter((r) => !r.ok), okN = res.length - ko.length;
       const title = !ko.length ? `Fatto: ${okN === 1 ? "modifica applicata" : okN + " modifiche applicate"}`
         : !okN ? (ko.length === 1 ? "Modifica NON riuscita" : `Nessuna modifica riuscita (${ko.length})`)
-        : `${okN} applicate, ${ko.length} NON riuscite`;
+        : `${okN} ${okN === 1 ? "applicata" : "applicate"}, ${ko.length} NON ${ko.length === 1 ? "riuscita" : "riuscite"}`;
       const ic = { ok: ["✔", "var(--ok)"], reboot: ["⟳", "var(--warn)"], unk: ["?", "var(--warn)"], ko: ["✘", "var(--bad)"] };
       const line = (r) => { const [i, c] = ic[r.state || (r.ok ? "ok" : "ko")]; return `<li style="list-style:none;margin-left:-18px"><b style="color:${c}">${i}</b> <b>${esc(r.name)}</b>: <span class="${r.ok ? "mut" : ""}" style="${r.ok ? "" : "color:var(--bad)"}">${esc(r.msg)}</span></li>`; };
       m.innerHTML = `<h2 style="color:${ko.length ? "var(--bad)" : "inherit"}">${title}</h2>

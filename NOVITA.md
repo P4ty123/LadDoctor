@@ -1,3 +1,7 @@
+## LagDoctor 5.25.9
+
+- Finestra dopo Applica: titolo al singolare quando serve ("1 NON riuscita").
+
 ## LagDoctor 5.25.8
 
 - "Disattiva risparmio energetico della scheda di rete": non funzionava ("comando non riuscito"). Il comando usato

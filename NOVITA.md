@@ -1,3 +1,19 @@
+## LagDoctor 5.23.0
+
+Interfaccia rinnovata:
+- Nuovo logo. Sotto il nome ora c'e' solo il numero di versione.
+- Nuovo stile dei pulsanti (icona in un riquadro colorato, freccia che scorre) per "Scansione completa", per
+  Analizza gioco e per i pulsanti in basso a sinistra (Impostazioni, Aggiornamenti, Cartella report, Ripristina
+  tutto, Esci), ognuno con la sua icona.
+- Panoramica: tolti i due pulsanti "Analizza un gioco" e la riga "Monitor". "Scansione completa" e' nel
+  riquadro del punteggio. Nel riquadro della Game mode una freccia porta direttamente alla sua sezione.
+- Menu: tolta la voce "Scansione". La scansione completa si apre dalla Panoramica.
+- Analizza gioco rifatta: i passaggi in alto, i giochi aperti come schede da scegliere, la durata con pulsanti e
+  un riepilogo prima di avviare. Registrazione in corso, risultato (con il giudizio Fluido / Qualche scatto /
+  Molti scatti), Sessioni e Prima / Dopo nello stesso stile.
+- Tolte le voci "Non affidabili" (tweak famosi che non funzionano o peggiorano). Se LagDoctor ne aveva attivata
+  qualcuna in passato, "Ripristina tutto" la annulla ancora.
+
 ## LagDoctor 5.22.2
 
 - CPU ed energia, controllate tutte le voci:

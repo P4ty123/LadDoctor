@@ -26,21 +26,19 @@ _CPU = [("fix_powersaver", "fix"), ("game_mode", "harm"), ("power_mode_best", "h
 CAUSES = {
     "background": ("Programmi e attivita' in background", _BG),
     "disk": ("Stutter da lettura dal disco (streaming dei dati del gioco)", [
-        ("fix_trim", "fix"), ("myth_trim_off", "myth"), ("myth_defrag_off", "myth"), ("fix_pagefile", "fix"),
-        ("myth_pagefile_off", "myth"), ("defender_excl", "help"), ("ntfs_lastaccess", "help"),
+        ("fix_trim", "fix"), ("fix_pagefile", "fix"),
+        ("defender_excl", "help"), ("ntfs_lastaccess", "help"),
         ("app_onedrive", "help"), ("storage_sense_off", "help"), ("pcie_aspm", "help"), ("sysmain", "help")]),
     "ram": ("RAM quasi piena", [
-        ("fix_largecache", "fix"), ("myth_largecache", "myth"), ("fix_pagefile", "fix"), ("myth_pagefile_off", "myth"),
-        ("app_teams", "help"), ("edge_bg_off", "help"), ("widgets_off", "help"), ("app_onedrive", "help")]),
+        ("fix_largecache", "fix"), ("fix_pagefile", "fix"), ("app_teams", "help"), ("edge_bg_off", "help"), ("widgets_off", "help"), ("app_onedrive", "help")]),
     "paging": ("Memoria spostata sul disco (paging)", [
-        ("fix_pagefile", "fix"), ("myth_pagefile_off", "myth"), ("fix_largecache", "fix"), ("myth_largecache", "myth"),
-        ("mem_compress", "on_bad"), ("fix_trim", "fix"), ("myth_trim_off", "myth"), ("app_teams", "help"),
+        ("fix_pagefile", "fix"), ("fix_largecache", "fix"), ("mem_compress", "on_bad"), ("fix_trim", "fix"), ("app_teams", "help"),
         ("edge_bg_off", "help"), ("widgets_off", "help"), ("app_onedrive", "help"), ("defender_excl", "help")]),
     "vram": ("VRAM piena", [
         ("edge_bg_off", "help"), ("widgets_off", "help"), ("app_teams", "help"), ("game_dvr", "harm")]),
     "shader": ("Compilazione degli shader / motore del gioco", [
         ("nvfix_shadercache", "fix"), ("nv_shadercache_unlimited", "help"), ("defender_excl", "help"),
-        ("fix_trim", "fix"), ("myth_trim_off", "myth")]),
+        ("fix_trim", "fix")]),
     "main_thread": ("Thread principale della CPU al limite", _CPU),
     "cpu_bound": ("Gioco limitato dalla CPU", _CPU),
     "cpu_throttle": ("CPU che rallenta (energia o calore)", [
@@ -54,7 +52,7 @@ CAUSES = {
     "fps_over_refresh": ("FPS sopra la frequenza del monitor", [
         ("nv_fps_cap", "help"), ("amd_fps_cap", "help"), ("vrr_opt", "help"), ("nvfix_vrr_blocked", "fix")]),
     "dpc": ("Driver che bloccano il sistema (latenza DPC/ISR)", [
-        ("myth_hpet_on", "myth"), ("fix_hpet", "fix"), ("nic_intmod", "on_bad"), ("idle_off", "on_bad"),
+        ("fix_hpet", "fix"), ("nic_intmod", "on_bad"), ("idle_off", "on_bad"),
         ("usb_suspend", "help"), ("pcie_aspm", "help"), ("nic_power", "help"), ("nic_eee", "help"),
         ("virt_off", "help"), ("metered_drivers", "help")]),
     "present": ("Presentazione dei frame (schermo intero / borderless / compositore)", [
@@ -65,7 +63,7 @@ CAUSES = {
         ("nvfix_vrr_blocked", "fix"), ("nv_fps_cap", "help"), ("amd_fps_cap", "help"), ("vrr_opt", "help"),
         ("nv_gsync_windowed", "help")]),
     "pacing": ("Stutter e frame pacing in generale", [
-        ("fix_hpet", "fix"), ("myth_hpet_on", "myth"), ("fix_powersaver", "fix"), ("nvfix_vsync_half", "fix"),
+        ("fix_hpet", "fix"), ("fix_powersaver", "fix"), ("nvfix_vsync_half", "fix"),
         ("nvfix_fpscap_low", "fix"), ("nvfix_vrr_blocked", "fix"), ("amdfix_chill", "fix"), ("amdfix_esync", "fix"),
         ("amdfix_frtc_low", "fix"), ("amdfix_vsync_always", "fix"), ("game_dvr", "harm"), ("virt_off", "help"),
         ("timer_res", "help"), ("windowed_opt", "help"), ("vrr_opt", "help"), ("pcie_aspm", "help"),

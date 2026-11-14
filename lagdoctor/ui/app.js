@@ -20,6 +20,28 @@ function modal(html) { $("#modal-card").className = "modal-card"; $("#modal-card
 function closeModal() { $("#modal").hidden = true; }
 const reportUrl = (f) => "/report?f=" + encodeURIComponent(f) + "&t=" + encodeURIComponent(window.LD_TOKEN);
 const base = (p) => String(p || "").split(/[\\/]/).pop();
+/* icone (tratto, 24x24) */
+const ICP = {
+  scan: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  arrow: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>',
+  rec: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+  cmp: '<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+  fps: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  gpu: '<rect x="2" y="7" width="20" height="10" rx="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
+  low: '<path d="M3 3v18h18"/><path d="m7 9 4 4 3-3 5 6"/>',
+  report: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+};
+const ic = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICP[k]}</svg>`;
+/* pulsante nel nuovo stile: icona + testo (+ freccia) */
+const actBtn = (attrs, icon, label, cls = "", chev = true) =>
+  `<button class="act ${cls}" ${attrs}><span class="ic">${ic(icon)}</span><span>${label}</span>${chev ? `<span class="chev">${ic("chev")}</span>` : ""}</button>`;
 const fmt = (v, d = 0) => (v === null || v === undefined || isNaN(v)) ? "–" : Number(v).toFixed(d);
 
 /* job: avvia e aspetta, aggiornando un elenco di messaggi */
@@ -40,7 +62,8 @@ function logList(el, msgs) { el.innerHTML = msgs.map((m) => "<li>" + esc(m) + "<
 function go(page) {
   if (page === "exp" || page === "sessions") { S.recTab = page; page = "record"; }
   S.page = page;
-  $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
+  const navPage = page === "scan" || page === "verifica" ? "home" : page;  /* pagine aperte dalla Panoramica */
+  $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === navPage));
   clearInterval(S.sensorTimer);
   main().scrollTop = 0;
   refreshState().catch(() => {});
@@ -50,18 +73,24 @@ function go(page) {
 $$("#nav a").forEach((a) => a.addEventListener("click", () => { if (a.dataset.page === "record") S.recTab = "rec"; go(a.dataset.page); }));
 
 function recTabs(active) {
-  return `<div class="tabs" id="rec-tabs">
-    <a data-t="rec" class="${active === "rec" ? "on" : ""}">Registra</a>
-    <a data-t="exp" class="${active === "exp" ? "on" : ""}">Prima / Dopo${S.state && S.state.experiment ? ' <span class="pill warn">in corso</span>' : ""}</a>
-    <a data-t="sessions" class="${active === "sessions" ? "on" : ""}">Sessioni</a></div>`;
+  const exp = S.state && S.state.experiment ? ' <span class="pill warn">in corso</span>' : "";
+  return `<div class="rtabs" id="rec-tabs">
+    <a data-t="rec" class="${active === "rec" ? "on" : ""}">${ic("rec")}Registra</a>
+    <a data-t="exp" class="${active === "exp" ? "on" : ""}">${ic("cmp")}Prima / Dopo${exp}</a>
+    <a data-t="sessions" class="${active === "sessions" ? "on" : ""}">${ic("list")}Sessioni</a></div>`;
 }
+/* intestazione comune delle pagine di Analizza gioco */
+function recHead(tab, sub) {
+  return `<div class="rg-head"><div><h1>Analizza gioco</h1><p class="sub">${sub}</p></div>${recTabs(tab)}</div>`;
+}
+const REC_SUB = "Registra una partita: LagDoctor misura ogni frame e ti dice cosa causa scatti e lag.";
 function bindRecTabs() {
   $$("#rec-tabs a").forEach((a) => a.addEventListener("click", () => { S.recTab = a.dataset.t; go("record"); }));
 }
 
 async function refreshState() {
   S.state = await api("/api/state");
-  if (S.state.version) $("#app-ver").textContent = "v" + S.state.version + " · stutter & lag";
+  if (S.state.version) $("#app-ver").textContent = "v" + S.state.version;
   const gmNav = $("#nav-gm"); if (gmNav && S.state.gm) gmNav.hidden = !S.state.gm.active;
   $("#nav-exp").hidden = !S.state.experiment;
   const rb = S.state.reboot || [], bar = $("#reboot-bar");
@@ -127,9 +156,10 @@ function gmHomeHtml(gm) {
     items = (gm.actions || []).filter((a) => !/^Game mode ATTIVA/.test(a)).slice(-4).map((a) => a.length > 70 ? a.slice(0, 68) + "…" : a);
   } else if (gm.running) { st = "Game mode pronta"; cls = "wait"; items = [`Controllo ${gm.n_games} giochi`, "Si attiva da sola quando apri un gioco"]; }
   else { st = "Game mode accesa ma non in esecuzione"; cls = ""; items = ["Apri la pagina Game mode per riavviarla"]; }
-  return `<div class="card gmcard"><div class="st"><span class="gdot ${cls}"></span>${esc(st)}</div>
+  return `<div class="card gmcard"><div class="gm-head"><div class="st"><span class="gdot ${cls}"></span>${esc(st)}</div>
+      <button class="act-arrow" data-go="gamemode" title="Vai alla Game mode" aria-label="Vai alla Game mode">${ic("arrow")}</button></div>
     <ul>${items.map((x) => "<li>" + esc(x) + "</li>").join("")}</ul>
-    <div class="acts row">${gm.active ? '<button class="sm" id="home-gm-ver">Verifica ottimizzazioni</button>' : ""}<button class="ghost sm" data-go="gamemode">${gm.enabled ? "Apri game mode" : "Accendi la game mode"}</button></div></div>`;
+    ${gm.active ? `<div class="acts row">${actBtn('id="home-gm-ver"', "scan", "Verifica ottimizzazioni", "sm")}</div>` : ""}</div>`;
 }
 function quickHtml(list) {
   if (!list || !list.length) return '<div class="mut" style="padding:8px 0">Nessun problema trovato.</div>';
@@ -153,7 +183,7 @@ async function home() {
       ${S.booting ? `<div class="card">${bootCardHtml()}</div>` : `<div class="card score">
         <div class="ring ${score >= 65 ? "" : score >= 45 ? "mid" : "low"}" style="--p:${score}"><div><div><b>${score}</b><small>su 100</small></div></div></div>
         <div><h3>${st.title}</h3><p>${st.text}</p>
-        ${fixN ? `<button data-go="tweaks">Correggi ora</button>` : `<button class="ghost" data-go="record">Analizza un gioco</button>`}</div></div>`}
+        <div class="acts2">${fixN ? `<button data-go="tweaks">Correggi ora</button>` : ""}${actBtn('data-go="scan"', "scan", "Scansione completa")}</div></div></div>`}
       ${gmHomeHtml(S.state.gm)}
     </div>
     <div class="sensors" id="home-sensors"></div>
@@ -162,9 +192,7 @@ async function home() {
         <div><span>Processore</span><b>${esc(si.cpu || "?")}</b></div>
         <div><span>Scheda video</span><b>${esc(g.name || "?")}${g.vram_mb && !g.integrated ? " · " + Math.round(g.vram_mb / 1024) + " GB" : ""}</b></div>
         <div><span>RAM</span><b>${esc(si.ram || "?")}</b></div>
-        <div><span>Monitor</span><b>${si.refresh_hz ? si.refresh_hz + " Hz" : "?"}</b></div>
-        <div><span>Modifiche di LagDoctor</span><b>${S.state.applied} attive</b></div></div>
-        <div class="row" style="margin-top:12px"><button class="ghost sm" data-go="scan">Scansione completa</button><button class="ghost sm" data-go="record">Analizza un gioco</button></div></div>
+        <div><span>Modifiche di LagDoctor</span><b>${S.state.applied} attive</b></div></div></div>
       <div class="card quick"><h4>Controllo rapido</h4>${S.booting ? '<div class="mut" style="padding:8px 0">Sto leggendo le impostazioni del sistema...</div>' : quickHtml(probs)}</div>
     </div>`;
   $$("[data-go]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.go === "tweaks") { S.filter = "fix"; S.twCat = ""; } if (b.dataset.go === "record") S.recTab = "rec"; go(b.dataset.go); }));
@@ -209,10 +237,12 @@ function startSensors(box) {
 function scan() {
   const r = S.lastScan;
   main().innerHTML = `
+    <button class="ghost sm" id="back-home" style="margin-bottom:14px">← Panoramica</button>
     <h1>Scansione completa</h1><p class="sub">Hardware, Windows, driver, dischi, rete, errori degli ultimi 30 giorni e lo stato di ogni impostazione. Richiede 1-2 minuti.</p>
     ${bootCardHtml()}
     <div class="row"><button id="go-scan" ${S.booting ? 'disabled title="Aspetta la fine della scansione delle impostazioni"' : ""}>${r ? "Ripeti scansione" : "Avvia scansione"}</button>${r ? `<button class="ghost" id="open-rep">Apri il report completo</button>` : ""}</div>
     <ul class="log" id="scan-log"></ul><div id="scan-out"></div>`;
+  $("#back-home").onclick = () => go("home");
   $("#go-scan").onclick = async () => {
     $("#go-scan").disabled = true; $("#scan-out").innerHTML = '<div class="spinner"></div>';
     try {
@@ -254,7 +284,6 @@ function scan() {
 
 /* ------------------------------------------------------------------ OTTIMIZZAZIONI */
 const EFF = { alta: 0, media: 1, bassa: 2, comfort: 3, dubbia: 4, sconsigliata: 5 };
-const MYTH_CAT = "Non affidabili (miti)";
 const tws = () => (S.catalog ? S.catalog.tweaks : []);
 /* voci che l'utente ha deciso di ignorare: compaiono solo in "Ignorate" e non contano nel punteggio */
 const twsActive = () => tws().filter((t) => !t.ignored);
@@ -470,12 +499,12 @@ function renderTweaks() {
     return `<div class="cat ${S.twCat === key ? "on" : ""} ${n ? "" : "empty"}" data-cat="${esc(key)}"><div class="r">${warn ? '<span class="warn" title="ci sono voci da correggere"></span>' : ""}<b>${esc(label)}</b><span class="c">${cnt}</span></div>
       <div class="p"><i style="width:${pct}%"></i></div></div>`;
   };
-  $("#cats").innerHTML = catRow("", "Tutte le categorie", act) + order.map((c) => catRow(c, c === MYTH_CAT ? "Non affidabili" : c, act.filter((t) => t.cat === c))).join("");
+  $("#cats").innerHTML = catRow("", "Tutte le categorie", act) + order.map((c) => catRow(c, c, act.filter((t) => t.cat === c))).join("");
   $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { if (el.dataset.cat === OV_CAT && S.twCat !== OV_CAT) S.ovLoaded = false; S.twCat = el.dataset.cat; renderTweaks(); }));
   /* pannello a destra */
   const list = visible();
   const fname = { fix: "da correggere", all: "", rec: "consigliate", off: "non attive", on: "attive", ign: "ignorate", myth: "non affidabili" }[S.filter] || "";
-  $("#pan-t").textContent = S.twCat ? (S.twCat === MYTH_CAT ? "Non affidabili" : S.twCat) : "Tutte le categorie";
+  $("#pan-t").textContent = S.twCat || "Tutte le categorie";
   const scope = act.filter((t) => !S.twCat || t.cat === S.twCat);
   const sTot = scope.filter((t) => t.kind !== "myth" || isOn(t)).length;
   const allMyth = scope.length && scope.every((t) => t.kind === "myth");
@@ -494,15 +523,11 @@ function renderTweaks() {
     (b.recommended === true) - (a.recommended === true) || (EFF[a.efficacy] - EFF[b.efficacy]) || a.risk - b.risk)
     .forEach((t) => (groups[t.cat] = groups[t.cat] || []).push(t));
   const ignNote = S.filter === "ign" ? `<div class="myth-note" style="background:rgba(255,255,255,.04);border-color:var(--line2)">Voci che hai deciso di ignorare: non compaiono tra quelle da correggere o consigliate e <b>non contano nel punteggio</b> del PC. Con <b>Non ignorare</b> tornano al loro posto.</div>` : "";
-  const mythNote = `<div class="myth-note">Tweak famosi che <b>non funzionano o peggiorano</b> le prestazioni sui PC moderni. Puoi comunque attivarli per provarli (apri i dettagli per sapere cosa fanno, quando potrebbero aiutare e perche' e' meglio lasciarli disattivati). Se uno risulta ATTIVO sul tuo PC, LagDoctor ti propone di disattivarlo.</div>`;
-  const myths = () => S.catalog.myths.map((m) => `<div class="tw2"><div class="tx"><b>${esc(m.name)}</b><div>${esc(m.why)}</div></div><div class="right"><span class="badge">non attivabile</span></div></div>`).join("");
   const multi = !S.twCat;
   const ovBox = S.twCat === OV_CAT ? overlayBox() : "";
   $("#tw-list").innerHTML = ovBox + ignNote + (list.length ? order.filter((c) => groups[c]).map((c) => `
-    <div class="tw-group">${multi ? `<h3>${esc(c === MYTH_CAT ? "Non affidabili" : c)}</h3>` : ""}
-    ${c === MYTH_CAT ? mythNote : ""}
+    <div class="tw-group">${multi ? `<h3>${esc(c)}</h3>` : ""}
     ${groups[c].map(rowHtml).join("")}
-    ${c === MYTH_CAT && S.filter === "all" ? myths() : ""}
     </div>`).join("") : `<div class="empty">${S.filter === "ign" ? "Nessuna voce ignorata." : S.filter === "fix" ? "Niente da correggere qui." : "Nessuna voce con questi filtri."}</div>`);
   $$("#tw-list .tw2[data-id]").forEach((row) => {
     const id = row.dataset.id;
@@ -890,23 +915,43 @@ async function record() {
   if (S.rec) return recordLive();
   if (S.lastRecord && S.lastRecord.result && !ctx.label) return recordResult(S.lastRecord.result);
   const r = await api("/api/processes");
-  let pick = r.items.length ? r.items[0].pid : null;
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("rec")}
-    ${ctx.label ? `<h2 style="margin-top:0">Registrazione ${esc(ctx.label)} per il test Prima / Dopo</h2>` : ""}
-    <p class="sub">1. Apri il gioco ed entra in partita. 2. Torna qui (Alt+Tab), scegli il gioco e la durata. 3. Torna a giocare: LagDoctor registra ogni frame.</p>
-    ${ctx.game ? `<div class="banner">Test prima/dopo: usa lo stesso gioco (<b>${esc(ctx.game)}</b>) e, se puoi, la stessa zona e la stessa durata.</div>` : ""}
-    <div class="row"><h2 class="grow" style="margin:0">Processi aperti</h2><button class="ghost sm" id="reload">Aggiorna elenco</button></div>
-    <div id="procs" style="margin-top:10px">${r.items.length ? r.items.map((p) => `
-      <div class="list-row pick ${p.pid === pick ? "on" : ""}" data-pid="${p.pid}"><b class="grow">${esc(p.name)}</b>${p.likely ? '<span class="badge b-acc">probabile gioco</span>' : ""}<span class="mut">${p.mem} MB</span></div>`).join("") : '<div class="empty">Nessun gioco trovato: apri il gioco e premi Aggiorna elenco.</div>'}</div>
-    <div class="row" style="margin-top:16px"><span>Durata</span>
-      <select id="dur"><option value="60">1 minuto</option><option value="180">3 minuti</option><option value="300" selected>5 minuti</option><option value="600">10 minuti</option><option value="1200">20 minuti</option></select>
-      <span class="grow"></span><button id="start" ${pick ? "" : "disabled"}>Avvia registrazione</button></div>`;
+  let pick = r.items.length ? r.items[0].pid : null, dur = 300;
+  const DURS = [[60, "1", "min"], [180, "3", "min"], [300, "5", "min"], [600, "10", "min"], [1200, "20", "min"]];
+  const durTxt = (v) => { const m = v / 60; return m + (m === 1 ? " minuto" : " minuti"); };
+  const nameOf = (pid) => { const p = r.items.find((x) => x.pid === pid); return p ? p.name : "–"; };
+  main().innerHTML = `${recHead("rec", REC_SUB)}
+    ${ctx.label ? `<div class="banner"><b>Registrazione ${esc(ctx.label)} per il test Prima / Dopo</b>${ctx.game ? `<br>Usa lo stesso gioco (<b>${esc(ctx.game)}</b>) e, se puoi, la stessa zona e la stessa durata.` : ""}</div>` : ""}
+    <div class="steps">
+      <div class="step"><span>1</span><div><b>Apri il gioco</b><small>ed entra in partita</small></div></div>
+      <div class="step"><span>2</span><div><b>Scegli gioco e durata</b><small>torna qui con Alt+Tab</small></div></div>
+      <div class="step"><span>3</span><div><b>Torna a giocare</b><small>LagDoctor registra ogni frame</small></div></div>
+    </div>
+    <div class="rg-grid">
+      <div class="card"><div class="rg-ph"><h4>Scegli il gioco</h4>${actBtn('id="reload"', "refresh", "Aggiorna elenco", "sm", false)}</div>
+        <div id="procs">${r.items.length ? r.items.map((p) => `
+          <div class="proc pick ${p.likely ? "likely" : ""} ${p.pid === pick ? "on" : ""}" data-pid="${p.pid}">
+            <span class="pav">${esc((p.name || "?").replace(/\.exe$/i, "").slice(0, 1).toUpperCase())}</span>
+            <div class="grow"><b>${esc(p.name)}</b><small>${p.mem} MB di RAM</small></div>
+            ${p.likely ? '<span class="badge b-acc">probabile gioco</span>' : ""}<span class="pchk">✓</span></div>`).join("")
+          : '<div class="empty">Nessun gioco aperto: apri il gioco, entra in partita e premi Aggiorna elenco.</div>'}</div></div>
+      <div class="card"><h4>Durata della registrazione</h4>
+        <div class="durs" id="durs">${DURS.map(([v, n, u]) => `<a data-d="${v}" class="${v === dur ? "on" : ""}">${n}<small>${u}</small></a>`).join("")}</div>
+        <div class="rg-sum"><div><small>Gioco</small><b id="sum-game">${esc(nameOf(pick))}</b></div><div><small>Durata</small><b id="sum-dur">${durTxt(dur)}</b></div></div>
+        <button class="big" id="start" ${pick ? "" : "disabled"}><span class="rdot"></span>Avvia registrazione</button>
+        <p class="mut tiny">Dopo l'avvio torna nel gioco e gioca normalmente, soprattutto dove senti gli scatti. Alla fine LagDoctor ti mostra le cause e come risolverle.</p></div>
+    </div>`;
   bindRecTabs();
   $("#reload").onclick = record;
-  $$("#procs .pick").forEach((el) => el.addEventListener("click", () => { pick = Number(el.dataset.pid); $$("#procs .pick").forEach((x) => x.classList.toggle("on", x === el)); $("#start").disabled = false; }));
+  $$("#procs .pick").forEach((el) => el.addEventListener("click", () => {
+    pick = Number(el.dataset.pid); $$("#procs .pick").forEach((x) => x.classList.toggle("on", x === el));
+    $("#sum-game").textContent = nameOf(pick); $("#start").disabled = false;
+  }));
+  $$("#durs a").forEach((el) => el.addEventListener("click", () => {
+    dur = Number(el.dataset.d); $$("#durs a").forEach((x) => x.classList.toggle("on", x === el)); $("#sum-dur").textContent = durTxt(dur);
+  }));
   $("#start").onclick = async () => {
     try {
-      const job = await api("/api/record", { pid: pick, seconds: Number($("#dur").value), label: ctx.label || "" });
+      const job = await api("/api/record", { pid: pick, seconds: dur, label: ctx.label || "" });
       pollRecording(job); recordLive();
     } catch (e) { toast("Errore: " + e.message); }
   };
@@ -953,32 +998,42 @@ function drawFrames(cv, frames) {
   frames.forEach((f, i) => { if (f > med * 2 && f - med > 8) { const x = i / (frames.length - 1 || 1) * w; c.fillRect(x - 1.5, 0, 3, h); } });
 }
 function recordLive() {
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("rec")}<h2 style="margin-top:0">Registrazione in corso</h2><p class="sub">Torna nel gioco e gioca normalmente, soprattutto dove senti gli scatti. Puoi lasciare questa finestra aperta.</p>
-    <div class="live">
-      <div class="card kpi big"><small>FPS</small><b id="l-fps">–</b></div>
-      <div class="card kpi big"><small>Tempo rimasto</small><b id="l-left">–</b></div>
-      <div class="card kpi big"><small>Frame peggiore</small><b id="l-worst">–</b></div>
-      <div class="card kpi big"><small>GPU</small><b id="l-gpu">–</b></div>
+  main().innerHTML = `${recHead("rec", REC_SUB)}
+    <div class="card live-hero"><span class="rec-dot"></span><div class="grow"><b>Registrazione in corso</b>
+      <p class="mut">Torna nel gioco e gioca normalmente, soprattutto dove senti gli scatti. Puoi lasciare questa finestra aperta.</p></div>
+      <button class="red" id="stop">Ferma ora e analizza</button></div>
+    <div class="stats">
+      <div class="stat"><small>${ic("fps")}FPS</small><b id="l-fps">–</b></div>
+      <div class="stat"><small>${ic("clock")}Tempo rimasto</small><b id="l-left">–</b></div>
+      <div class="stat warn"><small>${ic("bolt")}Frame peggiore</small><b id="l-worst">–</b></div>
+      <div class="stat"><small>${ic("gpu")}GPU</small><b id="l-gpu">–</b></div>
     </div>
-    <canvas id="cv"></canvas><p class="mut">Linea verde = tempo di ogni frame (piu' e' piatta, piu' e' fluido). Righe rosse = stutter.</p>
-    <div class="row"><button class="red" id="stop">Ferma ora e analizza</button><ul class="log grow" id="r-log"></ul></div>`;
+    <div class="card chart-card"><div class="rg-ph"><h4>Tempo di ogni frame</h4>
+      <div class="lg"><span><i style="background:#3fbf7f"></i>frame (piu' piatta = piu' fluido)</span><span><i style="background:#e5484d"></i>stutter</span></div></div>
+      <canvas id="cv"></canvas></div>
+    <ul class="log" id="r-log"></ul>`;
   bindRecTabs();
   $("#stop").onclick = () => { if (!S.rec) return; api("/api/stop", { id: S.rec.job.id }); $("#stop").disabled = true; $("#stop").textContent = "Fermo e analizzo..."; };
   updateLive();
 }
 function recordResult(r) {
   const s = r.session;
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("rec")}<h2 style="margin-top:0">Risultato: ${esc(s.gioco)}</h2><p class="sub">${esc(s.data)} · ${Math.round(s.durata_s / 60)} minuti · sessione #${s.id}</p>
-    <div class="live">
-      <div class="card kpi big"><small>FPS medi</small><b>${fmt(s.fps_medi)}</b></div>
-      <div class="card kpi big"><small>1% low</small><b>${fmt(s.fps_1low)}</b><span class="mut" style="font-size:12px">${s.fps_p1 ? "a percentile: " + fmt(s.fps_p1) : ""}</span></div>
-      <div class="card kpi big"><small>0.1% low</small><b>${fmt(s.fps_01low)}</b><span class="mut" style="font-size:12px">${s.fps_p01 ? "a percentile: " + fmt(s.fps_p01) : ""}</span></div>
-      <div class="card kpi big"><small>Stutter / min</small><b>${fmt(s.stutter_min, 1)}</b></div>
-      ${r.breakdown && r.breakdown.gpu_util_avg != null ? `<div class="card kpi big"><small>Utilizzo GPU medio</small><b>${fmt(r.breakdown.gpu_util_avg)}%</b></div>` : ""}
+  const sm = s.stutter_min || 0, grade = sm < 1 ? ["ok", "Fluido"] : sm < 4 ? ["warn", "Qualche scatto"] : ["bad", "Molti scatti"];
+  const lowCls = s.fps_medi && s.fps_1low ? (s.fps_1low / s.fps_medi >= 0.7 ? "ok" : s.fps_1low / s.fps_medi >= 0.5 ? "warn" : "bad") : "";
+  main().innerHTML = `${recHead("rec", REC_SUB)}
+    <div class="card res-hero"><span class="pav">${esc((s.gioco || "?").slice(0, 1).toUpperCase())}</span>
+      <div><h2>${esc(s.gioco)}</h2><p>${esc(s.data)} · ${Math.round(s.durata_s / 60)} minuti · sessione #${s.id}</p></div>
+      <span class="grade ${grade[0]}">${grade[1]}</span></div>
+    <div class="stats">
+      <div class="stat"><small>${ic("fps")}FPS medi</small><b>${fmt(s.fps_medi)}</b></div>
+      <div class="stat ${lowCls}"><small>${ic("low")}1% low</small><b>${fmt(s.fps_1low)}</b><span>${s.fps_p1 ? "a percentile: " + fmt(s.fps_p1) : ""}</span></div>
+      <div class="stat ${lowCls}"><small>${ic("low")}0.1% low</small><b>${fmt(s.fps_01low)}</b><span>${s.fps_p01 ? "a percentile: " + fmt(s.fps_p01) : ""}</span></div>
+      <div class="stat ${grade[0]}"><small>${ic("bolt")}Stutter / min</small><b>${fmt(s.stutter_min, 1)}</b></div>
+      ${r.breakdown && r.breakdown.gpu_util_avg != null ? `<div class="stat"><small>${ic("gpu")}GPU media</small><b>${fmt(r.breakdown.gpu_util_avg)}%</b></div>` : ""}
     </div>
     <p class="mut" style="font-size:12.5px;margin:-4px 0 12px">1% / 0.1% low = FPS medi dei frame peggiori (metodo severo). "A percentile" = metodo di PresentMon: se e' molto piu' alto, i bassi dipendono da pochi blocchi lunghi (vedi sotto), non da un gioco irregolare.</p>
     ${longHtml(r.breakdown, s)}
-    <div class="row"><button id="rep">Apri report con grafico</button><button class="ghost" id="again">Nuova registrazione</button></div>
+    <div class="row">${actBtn('id="rep"', "report", "Apri report con grafico")}${actBtn('id="again"', "rec", "Nuova registrazione")}</div>
     ${breakdownHtml(r.breakdown)}
     <h2>Cause trovate e soluzioni</h2>${probHtml(r.problems)}
     ${factorsHtml(r.factors)}
@@ -1060,7 +1115,7 @@ async function exp() {
   const e = S.state.experiment;
   if (e) {
     const names = e.modifiche.map((id) => (tws().find((t) => t.id === id) || { name: id }).name);
-    main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("exp")}<h2 style="margin-top:0">Test prima/dopo in corso</h2><p class="sub">Gioco: <b>${esc(e.gioco)}</b> · sessione PRIMA #${e.prima}</p>
+    main().innerHTML = `${recHead("exp", "Scopri se un'ottimizzazione serve DAVVERO sul tuo PC.")}<h2 style="margin-top:0">Test prima/dopo in corso</h2><p class="sub">Gioco: <b>${esc(e.gioco)}</b> · sessione PRIMA #${e.prima}</p>
       <div class="card"><b>Modifiche in prova</b><ul>${names.map((n) => "<li>" + esc(n) + "</li>").join("")}</ul></div>
       <p class="mut">Se alcune modifiche richiedevano il riavvio, assicurati di aver riavviato il PC.</p>
       <div class="row"><button id="after">Registra la partita DOPO</button><button class="ghost danger" id="cancel">Interrompi il test</button></div>`;
@@ -1071,11 +1126,12 @@ async function exp() {
   }
   const ss = await api("/api/sessions");
   let before = null;
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("exp")}<p class="sub">Scopri se un'ottimizzazione serve DAVVERO sul tuo PC: registri una partita, applichi le modifiche, ne registri un'altra e LagDoctor confronta. Consiglio: poche modifiche alla volta, stessa zona e stessa durata.</p>
-    <h2>1. Partita PRIMA delle modifiche</h2>
+  main().innerHTML = `${recHead("exp", "Scopri se un'ottimizzazione serve DAVVERO sul tuo PC.")}
+    <div class="note">Registri una partita, applichi le modifiche, ne registri un'altra e LagDoctor confronta. Consiglio: poche modifiche alla volta, stessa zona e stessa durata.</div>
+    <div class="sec"><span>1</span><h2>Partita PRIMA delle modifiche</h2></div>
     <div id="bef">${ss.items.length ? ss.items.slice(0, 8).map((s) => `<div class="list-row pick" data-id="${s.id}"><b class="grow">#${s.id} ${esc(s.gioco)}</b><span class="mut">${esc(s.data)}</span><span>FPS ${fmt(s.fps_medi)} · 1% ${fmt(s.fps_1low)} · stutter/min ${fmt(s.stutter_min, 1)}</span></div>`).join("") : '<div class="empty">Nessuna sessione registrata.</div>'}</div>
-    <div class="row" style="margin-top:8px"><button class="ghost" id="rec-before">Registra adesso la partita PRIMA</button></div>
-    <h2>2. Modifiche da provare</h2><div id="exp-tw"><p class="mut">Scegli prima la partita PRIMA.</p></div>`;
+    <div class="row" style="margin-top:8px">${actBtn('id="rec-before"', "rec", "Registra adesso la partita PRIMA")}</div>
+    <div class="sec"><span>2</span><h2>Modifiche da provare</h2></div><div id="exp-tw"><p class="mut">Scegli prima la partita PRIMA.</p></div>`;
   bindRecTabs();
   $("#rec-before").onclick = () => { S.lastRecord = null; S.recTab = "rec"; S.recCtx = { label: "PRIMA", onDone: () => { toast("Partita PRIMA registrata."); go("exp"); } }; go("record"); };
   $$("#bef .pick").forEach((el) => el.addEventListener("click", () => {
@@ -1099,7 +1155,7 @@ async function expResult(e, r) {
   S.page = "record"; S.recTab = "exp"; $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === "record"));
   const c = await api(`/api/compare?a=${e.prima}&b=${r.session.id}`);
   const names = e.modifiche.map((id) => (tws().find((t) => t.id === id) || { name: id }).name);
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("exp")}<h2 style="margin-top:0">Risultato del test</h2><p class="sub">${esc(e.gioco)} · modifiche provate: ${names.map(esc).join(", ")}</p>
+  main().innerHTML = `${recHead("exp", "Scopri se un'ottimizzazione serve DAVVERO sul tuo PC.")}<h2 style="margin-top:0">Risultato del test</h2><p class="sub">${esc(e.gioco)} · modifiche provate: ${names.map(esc).join(", ")}</p>
     ${compareHtml(c)}
     <div class="row" style="margin-top:16px"><button id="keep">Tieni le modifiche</button><button class="ghost danger" id="undo">Annulla le modifiche provate</button><button class="ghost" id="rep">Report della partita DOPO</button></div>`;
   bindRecTabs();
@@ -1120,10 +1176,10 @@ function compareHtml(c) {
 async function sessions() {
   const ss = await api("/api/sessions");
   const pick = [];
-  main().innerHTML = `<h1>Analizza gioco</h1>${recTabs("sessions")}<p class="sub">Seleziona due sessioni per confrontarle.</p>
-    ${ss.items.length ? `<table><tr><th></th><th>#</th><th>Gioco</th><th>Data</th><th>Tipo</th><th>FPS</th><th>1% low</th><th>Stutter/min</th><th></th></tr>
-      ${ss.items.map((s) => `<tr><td><input type="checkbox" value="${s.id}"></td><td>${s.id}</td><td>${esc(s.gioco)}</td><td>${esc(s.data)}</td><td>${esc(s.etichetta || "")}</td>
-      <td>${fmt(s.fps_medi)}</td><td>${fmt(s.fps_1low)}</td><td>${fmt(s.stutter_min, 1)}</td><td>${s.report ? `<button class="ghost sm" data-rep="${esc(base(s.report))}">Report</button>` : ""}</td></tr>`).join("")}</table>` : '<div class="empty">Nessuna sessione: usa Analizza gioco.</div>'}
+  main().innerHTML = `${recHead("sessions", "Le partite registrate. Seleziona due sessioni per confrontarle.")}
+    ${ss.items.length ? `<div class="card stbl"><table><tr><th></th><th>#</th><th>Gioco</th><th>Data</th><th>Tipo</th><th>FPS</th><th>1% low</th><th>Stutter/min</th><th></th></tr>
+      ${ss.items.map((s) => `<tr><td><input type="checkbox" value="${s.id}"></td><td class="mut">${s.id}</td><td><b>${esc(s.gioco)}</b></td><td class="mut">${esc(s.data)}</td><td>${s.etichetta ? `<span class="badge ${s.etichetta === "DOPO" ? "b-ok" : "b-acc"}">${esc(s.etichetta)}</span>` : ""}</td>
+      <td><b>${fmt(s.fps_medi)}</b></td><td>${fmt(s.fps_1low)}</td><td>${fmt(s.stutter_min, 1)}</td><td>${s.report ? actBtn(`data-rep="${esc(base(s.report))}"`, "report", "Report", "sm", false) : ""}</td></tr>`).join("")}</table></div>` : '<div class="empty">Nessuna sessione: registra una partita dalla scheda Registra.</div>'}
     <div id="cmp"></div>
     <div class="bar"><span class="grow mut" id="cmp-n">Seleziona 2 sessioni (la prima e' il PRIMA)</span><button id="cmp-go" disabled>Confronta</button></div>`;
   bindRecTabs();
@@ -1290,7 +1346,7 @@ function bootCardHtml() {
 }
 function setBooting(on) {
   S.booting = on;
-  $("#nav-scan-spin").hidden = !on;
+  const sp = $("#nav-scan-spin"); if (sp) sp.hidden = !on;
 }
 async function backgroundBoot(job) {
   setBooting(true);

@@ -155,7 +155,6 @@ def catalog_json():
     applied = tweaks.applied_by_us()
     ign = tweaks.ignored()
     return {"tweaks": [tweak_json(t, st, applied, STATE["sysinfo"], ign) for t in tweaks.for_vendor(vendor())],
-            "myths": [{"name": n, "why": w} for n, w in tweaks.NOT_TOGGLEABLE],
             "manual": [{"name": n, "how": h, "source": src} for n, h, src in tweaks.MANUAL_TIPS],
             "checked": bool(st)}
 

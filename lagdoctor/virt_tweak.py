@@ -125,6 +125,6 @@ def register():
     T.CATALOG[:] = [t for t in T.CATALOG if t.id not in OLD_IDS]
     T.CATALOG.append(VIRT)
     T.CATALOG.sort(key=lambda t: T.CAT_ORDER.index(t.cat))
-    T.BY_ID.clear()
+    # niente clear(): BY_ID contiene anche voci tolte dal catalogo che devono restare annullabili
     T.BY_ID.update({t.id: t for t in T.CATALOG})
     T.BY_ID.update({t.id: t for t in old})  # restano annullabili se applicate con una versione precedente

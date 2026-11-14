@@ -11,10 +11,15 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><span class="logo">LD</span><div><b>LagDoctor</b><small id="app-ver">stutter &amp; lag</small></div></div>
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 40 40"><defs><linearGradient id="lg-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#00d4ff"/></linearGradient></defs>
+        <rect width="40" height="40" rx="12" fill="url(#lg-bg)"/><rect x="1" y="1" width="38" height="38" rx="11" fill="none" stroke="#fff" stroke-opacity=".22"/>
+        <path d="M7 22h6l2.6-7 4.2 14 3.4-10 1.8 3H33" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="33" cy="22" r="2.2" fill="#fff"/></svg></span>
+      <div><b>LagDoctor</b><small id="app-ver"></small></div>
+    </div>
     <nav id="nav">
-      <a data-page="home" class="active"><i>&#9673;</i>Panoramica</a>
-      <a data-page="scan"><i>&#8981;</i>Scansione<span class="nav-spin" id="nav-scan-spin" hidden title="Scansione delle impostazioni in corso"></span></a>
+      <a data-page="home" class="active"><i>&#9673;</i>Panoramica<span class="nav-spin" id="nav-scan-spin" hidden title="Scansione delle impostazioni in corso"></span></a>
       <a data-page="tweaks"><i>&#9881;</i>Ottimizzazioni<span class="pill" id="nav-fix" hidden></span></a>
       <a data-page="driver"><i>&#9636;</i>Driver video</a>
       <a data-page="startup"><i>&#9211;</i>Avvio automatico</a>
@@ -22,11 +27,11 @@
       <a data-page="record"><i>&#9679;</i>Analizza gioco<span class="pill warn" id="nav-exp" hidden>test</span></a>
     </nav>
     <div class="side-foot">
-      <button class="ghost sm" id="btn-settings">Impostazioni</button>
-      <button class="ghost sm" id="btn-update">Aggiornamenti<span class="upd-dot" id="nav-upd" hidden title="Aggiornamento disponibile"></span></button>
-      <button class="ghost sm" id="btn-folder">Cartella report</button>
-      <button class="ghost sm danger" id="btn-restore">Ripristina tutto</button>
-      <button class="ghost sm" id="btn-quit">Esci</button>
+      <button class="act block" id="btn-settings"><span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span><span>Impostazioni</span></button>
+      <button class="act block" id="btn-update"><span class="ic"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg></span><span>Aggiornamenti</span><span class="upd-dot" id="nav-upd" hidden title="Aggiornamento disponibile"></span></button>
+      <button class="act block" id="btn-folder"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><span>Cartella report</span></button>
+      <button class="act block danger" id="btn-restore"><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></span><span>Ripristina tutto</span></button>
+      <button class="act block" id="btn-quit"><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg></span><span>Esci</span></button>
     </div>
   </aside>
   <div class="content">

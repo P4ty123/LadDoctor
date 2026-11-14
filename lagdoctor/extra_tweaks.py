@@ -339,7 +339,9 @@ WINSET = [
 ]
 
 
-# ============================================================================ NON AFFIDABILI (miti attivabili)
+# ============================================================================ NON AFFIDABILI (tolte dal catalogo)
+# Dalla 5.23 queste voci non compaiono piu'. Le definizioni restano SOLO per poter annullare quelle che LagDoctor
+# aveva attivato in passato (Ripristina tutto / annulla): non sono nel catalogo e non vengono proposte.
 
 MYTH = "Non affidabili (miti)"
 
@@ -418,14 +420,14 @@ NOT_TOGGLEABLE = [
 
 
 def register():
-    T.CATALOG.extend(DEBLOAT + TIMER + WINSET + MYTHS_TWEAKS)
-    for cat in (DEB, MYTH):
-        if cat not in T.CAT_ORDER:
-            T.CAT_ORDER.append(cat)
+    T.CATALOG.extend(DEBLOAT + TIMER + WINSET)
+    if DEB not in T.CAT_ORDER:
+        T.CAT_ORDER.append(DEB)
     # il vecchio GlobalTimerResolutionRequests da solo e' alternativo al Timer Resolution completo
     for t in T.CATALOG:
         if t.id == "timer_global":
             t.group = "timer"
     T.CATALOG.sort(key=lambda t: T.CAT_ORDER.index(t.cat))
     T.BY_ID.clear()
+    T.BY_ID.update({t.id: t for t in MYTHS_TWEAKS})  # solo per annullarle (vedi sopra)
     T.BY_ID.update({t.id: t for t in T.CATALOG})

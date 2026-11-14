@@ -139,8 +139,9 @@ DEFAULT_OPTS = {k: v for k, v, *_ in OPTIONS}
 
 APPS = ["widgets.exe", "widgetservice.exe", "phoneexperiencehost.exe", "yourphone.exe", "crossdeviceresume.exe",
         "copilot.exe", "cortana.exe", "microsoftedgeupdate.exe", "googleupdate.exe"]
-SHELL = ["explorer.exe", "startmenuexperiencehost.exe", "searchhost.exe", "shellexperiencehost.exe",
-         "widgets.exe"]
+# solo Esplora risorse: Start, ricerca e shell sono app che Windows tiene gia' sospese quando non le usi (quasi zero
+# CPU); chiuderle non dava vantaggi e alla fine la barra delle applicazioni ci metteva di piu' a ridisegnarsi
+SHELL = ["explorer.exe"]
 SERVICES = {
     # PcaSvc non c'e': Windows lo riavvia a ogni programma che si apre, fermarlo non serve
     "stop_services": ["WSearch", "SysMain", "DiagTrack", "WerSvc", "MapsBroker"],
@@ -415,13 +416,17 @@ def _ps(cmd, timeout=120):
     return _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], timeout)
 
 
-def launch_as_user(exe, args=""):
-    """Avvia un programma con i permessi NORMALI dell'utente (non da amministratore), es. Esplora risorse."""
+def launch_as_user(exe, args="", fast=False):
+    """Avvia un programma con i permessi NORMALI dell'utente (non da amministratore), es. Esplora risorse.
+    fast=True: l'attivita' usata per l'avvio viene cancellata dopo, senza far aspettare chi chiama."""
     tr = '"%s" %s' % (exe, args) if args else '"%s"' % exe
     code, out = _run(["schtasks", "/Create", "/TN", LAUNCH_TASK, "/TR", tr, "/SC", "ONCE", "/ST", "23:59",
                       "/RL", "LIMITED", "/F"])
     if code == 0:
-        _run(["schtasks", "/Run", "/TN", LAUNCH_TASK])
+        ok = _run(["schtasks", "/Run", "/TN", LAUNCH_TASK])[0] == 0
+        if fast:
+            threading.Timer(5, lambda: _run(["schtasks", "/Delete", "/TN", LAUNCH_TASK, "/F"])).start()
+            return ok
         time.sleep(1.5)
         _run(["schtasks", "/Delete", "/TN", LAUNCH_TASK, "/F"])
         return True
@@ -1125,6 +1130,18 @@ class Engine:
             return
         j = self.j
         log("Disattivo la game mode (%s)" % reason)
+        # PRIMA di tutto Esplora risorse: barra delle applicazioni e desktop tornano subito (il resto, piu' lento,
+        # viene ripristinato dopo, mentre usi gia' il PC)
+        if j.get("shell_restart_prev") is not None:
+            try:
+                _autorestart_shell(restore=j["shell_restart_prev"])
+            except Exception as e:
+                log("AutoRestartShell non ripristinato: %s" % e)
+        if j.get("explorer") and not any((p.info["name"] or "").lower() == "explorer.exe"
+                                         for p in psutil.process_iter(["name"])):
+            explorer = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "explorer.exe")
+            if not launch_as_user(explorer, fast=True):
+                launch_as_user(explorer)
         # priorita' e affinita' dei giochi ancora aperti (se la game mode viene spenta durante il gioco)
         for pid, info in list(self.game_pids.items()):
             try:
@@ -1157,14 +1174,6 @@ class Engine:
         if j.get("services"):
             lst = ",".join("'%s'" % n for n in j["services"])
             _ps("foreach ($n in @(%s)) { Start-Service -Name $n -ErrorAction SilentlyContinue }" % lst, timeout=180)
-        if j.get("shell_restart_prev") is not None:  # prima di riaprire Esplora risorse rimetto il riavvio automatico
-            try:
-                _autorestart_shell(restore=j["shell_restart_prev"])
-            except Exception as e:
-                log("AutoRestartShell non ripristinato: %s" % e)
-        if j.get("explorer") and not any((p.info["name"] or "").lower() == "explorer.exe"
-                                         for p in psutil.process_iter(["name"])):
-            launch_as_user(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "explorer.exe"))
         for exe in j.get("restart", []):
             if os.path.isfile(exe):
                 launch_as_user(exe, "/background")

@@ -1,3 +1,11 @@
+## LagDoctor 5.21.2
+
+- Game mode con "Chiudi Esplora risorse": a fine partita Esplora risorse viene riaperto PER PRIMO (prima veniva
+  riaperto dopo aver fatto ripartire servizi e attivita', e lo schermo restava grigio a lungo). Il resto viene
+  ripristinato dopo, mentre usi gia' il PC.
+- Viene chiuso solo Esplora risorse: Start, ricerca e shell restano (Windows le tiene gia' sospese). Alla fine la
+  barra delle applicazioni si ridisegna piu' in fretta (era la causa probabile del rettangolo nero in basso a sinistra).
+
 ## LagDoctor 5.25.5
 
 - Finestra senza barra di Edge: trovata e corretta la causa del blocco ("non risponde" pochi secondi dopo

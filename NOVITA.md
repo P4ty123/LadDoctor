@@ -1,3 +1,20 @@
+## LagDoctor 5.22.0
+
+- "Escludi le cartelle dei giochi da Defender" (prima "...la cartella..."):
+  - Prima veniva proposta una sola cartella, presa dall'ultimo gioco analizzato (spesso un singolo gioco).
+    Ora la finestra mostra TUTTE le cartelle dei giochi su TUTTI i dischi, ognuna con la sua spunta, il disco,
+    quanti giochi contiene e da dove arriva. Si puo' aggiungere anche una cartella a mano.
+  - Le cartelle arrivano dai launcher (Steam con tutte le sue librerie, Epic, GOG, Xbox, Ubisoft, EA, Riot,
+    Rockstar...) e da una ricerca su tutti i dischi fissi per i giochi senza launcher: un gioco viene
+    riconosciuto dai file tipici dei motori e degli SDK per giochi (Unity, Unreal, Steamworks, Epic Online
+    Services...). La ricerca non entra nelle cartelle di sistema e dura al massimo una dozzina di secondi.
+  - Viene proposta la cartella che raccoglie i giochi (es. ...\steamapps\common, D:\Giochi, F:\XboxGames).
+    Un gioco da solo in una cartella qualsiasi (es. Download) viene proposto da solo, per non escludere tutta
+    quella cartella.
+  - La voce risulta attiva solo se TUTTI i giochi trovati sono esclusi. Se ne mancano (es. giochi installati
+    dopo o su un nuovo disco), compare il pulsante "Aggiungi cartelle".
+  - Se una cartella non si riesce a escludere, quelle gia' aggiunte vengono tolte: tutto torna come prima.
+
 ## LagDoctor 5.21.5
 
 - "Escludi la cartella dei giochi da Defender":

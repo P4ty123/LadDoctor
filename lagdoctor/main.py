@@ -240,9 +240,16 @@ def apply_tweaks(ids, sysinfo):
     done = []
     for t in ts:
         if isinstance(t, tweaks.DefenderExclusionTweak):
-            last = next((s.get("cartella") for s in reversed(sessions.all_sessions()) if s.get("cartella")), "")
-            default = os.path.dirname(last) if last else ""
-            t.path = ask("  Cartella da escludere da Defender [%s]: " % default, default).strip('"')
+            from . import games
+            libs = games.library_folders()
+            if libs:
+                print("  Cartelle dei giochi trovate su tutti i dischi:")
+                for lib in libs:
+                    print("    %s  (%d giochi)" % (lib["path"], len(lib["games"])))
+            default = ";".join(lib["path"] for lib in libs)
+            t.paths = [p.strip().strip('"') for p in
+                       ask("  Cartelle da escludere da Defender, separate da ; [%s]: " % default, default).split(";")
+                       if p.strip()]
         try:
             print("  %s: %s" % (t.name, tweaks.apply_one(t.id)))
             done.append(t.id)

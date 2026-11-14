@@ -328,3 +328,173 @@ def anticheat_running(proc_names):
         if any(p in s for p in procs):
             return name
     return None
+
+
+# ---------------------------------------------------------------- cartelle dei giochi (per Defender)
+def too_generic(path):
+    """Motivo per cui una cartella e' troppo ampia per un'esclusione di Defender, oppure None."""
+    p = os.path.normcase(os.path.abspath(path)).rstrip("\\/")
+    if re.match(r"^[a-z]:$", p, re.I) or re.match(r"^\\\\[^\\]+\\[^\\]+$", p) or p in ("", os.sep):
+        return "e' un disco intero"
+    env = os.environ.get
+    sysroot = os.path.normcase(os.path.abspath(env("SystemRoot") or r"C:\Windows")).rstrip("\\/")
+    risky = [env("SystemRoot"), env("ProgramFiles"), env("ProgramFiles(x86)"), env("ProgramW6432"),
+             env("ProgramData"), env("USERPROFILE"), env("APPDATA"), env("LOCALAPPDATA"), env("TEMP"),
+             os.path.join(os.path.splitdrive(env("SystemRoot") or "C:")[0] + os.sep, "Users")]
+    for r in filter(None, risky):
+        r = os.path.normcase(os.path.abspath(r)).rstrip("\\/")
+        if p == r:
+            return "e' una cartella di sistema (%s)" % r
+    if p.startswith(sysroot + os.sep):
+        return "e' dentro la cartella di Windows"
+    return None
+
+
+# ---------------------------------------------------------------- ricerca su tutti i dischi (giochi senza launcher)
+# File che si trovano quasi solo nella cartella principale di un gioco (motori e SDK per giochi)
+GAME_FILES = {"unityplayer.dll", "gameassembly.dll", "steam_api64.dll", "steam_api.dll", "eossdk-win64-shipping.dll",
+              "galaxy64.dll", "bink2w64.dll", "binkw64.dll", "fmod.dll", "fmodstudio.dll", "physx3_x64.dll",
+              "physx_64.dll", "nvngx_dlss.dll", "amd_fidelityfx_dx12.dll", "libxess.dll", "discord_game_sdk.dll",
+              "uplay_r1_loader64.dll", "upc_r2_loader64.dll", "easyanticheat_x64.dll", "beclient_x64.dll"}
+# cartelle da non visitare (sistema, programmi che non sono giochi, dati)
+SCAN_SKIP = re.compile(r"^(windows|\$.*|system volume information|recovery|perflogs|config\.msi|programdata|"
+                       r"msocache|intel|amd|nvidia|drivers|windowsapps|common files|microsoft.*|windows .*|"
+                       r"internet explorer|reference assemblies|dotnet|modifiablewindowsapps|appdata|"
+                       r"node_modules|\..*|__pycache__|site-packages|python\d*|java|jdk.*|jre.*|android|"
+                       r"onedrive|dropbox|google drive|icloud.*|steamapps|steam)$", re.I)
+# nome di una cartella che raccoglie giochi (si propone lei invece del singolo gioco)
+GAME_LIB = re.compile(r"games?|giochi|gioco|gaming|juegos|spiele|jeux|steamlibrary|xboxgames|gog|riot|"
+                      r"rockstar|ubisoft|origin|ea |battle\.net|blizzard|emulat|roms", re.I)
+
+_SCAN_CACHE = {"t": 0, "data": None}
+
+
+def _fixed_drives():
+    """Dischi fissi (interni e SSD/HDD esterni sempre collegati): niente lettori, chiavette o dischi di rete."""
+    if os.name != "nt":
+        return []
+    import ctypes
+    import string
+    out = []
+    for d in string.ascii_uppercase:
+        root = d + ":\\"
+        try:
+            if ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(root)) == 3:  # DRIVE_FIXED
+                out.append(root)
+        except Exception:
+            pass
+    return out
+
+
+def _looks_like_game(path, real_names):
+    """real_names: nomi (come sono sul disco) dentro la cartella."""
+    names = {n.lower() for n in real_names}
+    if GAME_FILES & names:
+        return True
+    if any(n.endswith("_data") for n in names) and "unityplayer.dll" in names:
+        return True
+    # Unreal Engine: <gioco>\Engine + <gioco>\<Progetto>\Binaries\Win64
+    if "engine" in names:
+        for n in real_names:
+            if n.lower() != "engine" and os.path.isdir(os.path.join(path, n, "Binaries", "Win64")):
+                return True
+    return False
+
+
+def scan_drives(max_depth=4, budget_s=12.0, roots=None):
+    """Cerca le cartelle dei giochi su TUTTI i dischi fissi, anche giochi senza launcher (copiati, installati a
+    mano, emulatori...). Riconosce un gioco dai file tipici dei motori (Unity, Unreal) e degli SDK per giochi.
+    Non entra nelle cartelle di sistema e si ferma dopo budget_s secondi."""
+    import time
+    t0 = time.time()
+    found = []
+    stack = [(r, 0) for r in reversed(roots if roots is not None else _fixed_drives())]
+    while stack:
+        if time.time() - t0 > budget_s:
+            break
+        path, depth = stack.pop()
+        try:
+            with os.scandir(path) as it:
+                entries = list(it)
+        except OSError:
+            continue
+        if depth > 0 and _looks_like_game(path, [e.name for e in entries]):
+            found.append(dict(id=_id("disco", path), name=os.path.basename(path), source="disco", dir=path,
+                              match="dir"))
+            continue  # niente sottocartelle: e' gia' un gioco
+        if depth >= max_depth:
+            continue
+        for e in sorted(entries, key=lambda e: e.name.lower(), reverse=True):
+            try:
+                if e.is_dir(follow_symlinks=False) and not SCAN_SKIP.match(e.name):
+                    stack.append((e.path, depth + 1))
+            except OSError:
+                pass
+    return found
+
+
+def scan_drives_cached(max_age=600):
+    import time
+    if _SCAN_CACHE["data"] is None or time.time() - _SCAN_CACHE["t"] > max_age:
+        _SCAN_CACHE.update(t=time.time(), data=scan_drives())
+    return _SCAN_CACHE["data"]
+
+
+def all_game_dirs(scan=True):
+    """Giochi dei launcher + giochi trovati sui dischi (senza doppioni, ne' giochi dentro altri giochi)."""
+    games = [g for g in detect() if g.get("dir")]
+    if scan:
+        known = [os.path.normcase(g["dir"]) for g in games]
+        for g in scan_drives_cached():
+            d = os.path.normcase(g["dir"])
+            if not any(d == k or d.startswith(k + os.sep) or k.startswith(d + os.sep) for k in known):
+                games.append(g)
+                known.append(d)
+    return games
+
+
+def _root_for(g):
+    """Cartella "libreria" che contiene il gioco: steamapps\\common, XboxGames, la cartella del launcher
+    (es. E:\\Epic Games), oppure la cartella del gioco se quella sopra e' troppo ampia (es. Programmi)."""
+    d = os.path.normpath(g["dir"])
+    low = os.path.normcase(d)
+    i = low.find(os.path.normcase(os.path.join("steamapps", "common")) + os.sep)
+    if i >= 0:
+        return d[:i + len(os.path.join("steamapps", "common"))]
+    i = low.find(os.sep + "xboxgames" + os.sep)
+    if i >= 0:
+        return d[:i + len(os.sep + "XboxGames")]
+    parent = os.path.dirname(d)
+    if not parent or parent == d or too_generic(parent) or not GAME_LIB.search(os.path.basename(parent)):
+        return d  # es. D:\\Download\\Gioco: escludo solo il gioco, non tutta la cartella Download
+    return parent
+
+
+def library_folders(found=None):
+    """Le cartelle da proporre per l'esclusione da Defender: una per libreria di giochi, su tutti i dischi.
+    Lista di dict: path, drive, games (nomi), sources (launcher o "disco")."""
+    roots = {}
+    for g in (found if found is not None else all_game_dirs()):
+        if not g.get("dir"):
+            continue
+        r = _root_for(g)
+        if too_generic(r):
+            continue
+        e = roots.setdefault(os.path.normcase(r), {"path": r, "games": [], "sources": []})
+        e["games"].append(g["name"])
+        e["sources"].append(g.get("source") or "")
+    # tolgo le cartelle gia' contenute in un'altra proposta
+    keys = sorted(roots, key=len)
+    keep = []
+    for k in keys:
+        parent = next((p for p in keep if k.startswith(p + os.sep)), None)
+        if parent:
+            roots[parent]["games"] += roots[k]["games"]
+            roots[parent]["sources"] += roots[k]["sources"]
+        else:
+            keep.append(k)
+    out = [dict(roots[k], drive=os.path.splitdrive(roots[k]["path"])[0].upper()) for k in keep]
+    for o in out:
+        o["games"] = sorted(set(o["games"]), key=str.lower)
+        o["sources"] = sorted(set(o["sources"]) - {""})
+    return sorted(out, key=lambda o: o["path"].lower())

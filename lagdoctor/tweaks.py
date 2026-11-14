@@ -360,11 +360,12 @@ class DxUserSettingTweak(Tweak):
 
 
 class DefenderExclusionTweak(Tweak):
-    """Esclude la cartella dei giochi dalla scansione in tempo reale di Defender."""
+    """Esclude le cartelle dei giochi (una o piu', su qualsiasi disco) dalla scansione in tempo reale di Defender."""
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        self.path = None  # impostato dall'interfaccia prima di apply
+        self.paths = []    # impostate dall'interfaccia prima di apply
+        self.path = None   # compatibilita': una sola cartella
 
     @staticmethod
     def exclusions():
@@ -380,62 +381,93 @@ class DefenderExclusionTweak(Tweak):
         paths = [os.path.expandvars(l) for l in lines]
         return [os.path.normcase(x.rstrip("\\/")) for x in paths if re.match(r"^([A-Za-z]:|\\\\)", x)]
 
+    @staticmethod
+    def covered(d, excl):
+        d = os.path.normcase(d.rstrip("\\/"))
+        return any(d == e or d.startswith(e + os.sep) for e in excl)
+
     def status(self):
-        """Attiva se almeno una cartella di giochi trovata sul PC e' gia' esclusa da Defender (da chiunque)."""
+        """Attiva se TUTTI i giochi trovati sul PC (su qualsiasi disco) sono in una cartella esclusa da Defender."""
         excl = self.exclusions()
         if excl is None:
             return None
         try:
             from . import games
-            dirs = [os.path.normcase(g["dir"]) for g in games.detect() if g.get("dir")]
+            dirs = [g["dir"] for g in games.all_game_dirs()]  # launcher + giochi trovati sui dischi
         except Exception:
             dirs = []
         if not excl:
             return False
         if not dirs:
             return None
-        return any(d == e or d.startswith(e + os.sep) for d in dirs for e in excl)
+        return all(self.covered(d, excl) for d in dirs)
 
     @staticmethod
     def too_generic(path):
-        """Motivo per cui la cartella e' troppo ampia da escludere, oppure None."""
-        p = os.path.normcase(os.path.abspath(path)).rstrip("\\/")
-        if re.match(r"^[a-z]:$", p, re.I) or re.match(r"^\\\\[^\\]+\\[^\\]+$", p):
-            return "e' un disco intero"
-        env = os.environ.get
-        risky = [env("SystemRoot"), env("ProgramFiles"), env("ProgramFiles(x86)"), env("ProgramW6432"),
-                 env("ProgramData"), env("USERPROFILE"), env("APPDATA"), env("LOCALAPPDATA"), env("TEMP"),
-                 os.path.join(os.path.splitdrive(env("SystemRoot") or "C:")[0] + os.sep, "Users")]
-        for r in filter(None, risky):
-            r = os.path.normcase(os.path.abspath(r)).rstrip("\\/")
-            if p == r:
-                return "e' una cartella di sistema (%s)" % r
-            if r == os.path.normcase(os.path.abspath(env("SystemRoot") or "")) and p.startswith(r + os.sep):
-                return "e' dentro la cartella di Windows"
-        return None
+        from . import games
+        return games.too_generic(path)
 
     def apply(self):
-        if not self.path or not os.path.isdir(self.path):
-            raise RuntimeError("cartella non valida")
-        path = os.path.abspath(self.path)
-        why = self.too_generic(path)
-        if why:
-            raise RuntimeError("non escludo %s: %s. Scegli la cartella che contiene solo i giochi "
-                               "(es. ...\\steamapps\\common)." % (path, why))
+        paths = [p for p in (self.paths or ([self.path] if self.path else [])) if p and p.strip()]
+        if not paths:
+            raise RuntimeError("nessuna cartella scelta")
+        clean, seen = [], set()
+        for p in paths:
+            p = os.path.abspath(p.strip().strip('"'))
+            if not os.path.isdir(p):
+                raise RuntimeError("la cartella non esiste: %s" % p)
+            why = self.too_generic(p)
+            if why:
+                raise RuntimeError("non escludo %s: %s. Scegli la cartella che contiene solo i giochi "
+                                   "(es. ...\\steamapps\\common)." % (p, why))
+            if os.path.normcase(p) not in seen:
+                seen.add(os.path.normcase(p))
+                clean.append(p)
         excl = self.exclusions() or []
-        existed = os.path.normcase(path.rstrip("\\/")) in excl
-        if not existed:
-            code, out = ps("Add-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % path.replace("'", "''"))
-            if code != 0:
-                raise RuntimeError(out[-300:] or "Defender ha rifiutato la modifica")
-        return {"path": path, "existed": existed}
+        items = []
+        try:
+            for p in clean:
+                existed = os.path.normcase(p.rstrip("\\/")) in excl
+                if not existed:
+                    code, out = ps("Add-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % p.replace("'", "''"))
+                    if code != 0:
+                        raise RuntimeError("%s: %s" % (p, out[-300:] or "Defender ha rifiutato la modifica"))
+                items.append({"path": p, "existed": existed})
+        except Exception:
+            self.revert({"items": items})  # tolgo quelle gia' aggiunte: tutto come prima
+            raise
+        return {"items": items}
+
+    def reapply(self, backup):
+        """Gia' applicata: aggiunge le nuove cartelle (es. giochi su un altro disco) allo stesso backup."""
+        old = backup.get("items")
+        if old is None:
+            old = [{"path": backup["path"], "existed": backup.get("existed", False)}] if backup.get("path") else []
+        known = {os.path.normcase(i["path"]) for i in old}
+        self.paths = [p for p in (self.paths or ([self.path] if self.path else []))
+                      if p and os.path.normcase(os.path.abspath(p.strip().strip('"'))) not in known]
+        if not self.paths:
+            return "gia' applicata (cartelle gia' escluse)"
+        new = self.apply()["items"]
+        state = load_state()
+        if self.id in state:
+            state[self.id]["backup"] = {"items": old + new}
+            save_state(state)
+        return "aggiunta 1 cartella" if len(new) == 1 else "aggiunte %d cartelle" % len(new)
 
     def revert(self, backup):
-        if backup.get("existed"):
-            return  # c'era gia' prima di LagDoctor: non la tolgo
-        code, out = ps("Remove-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % backup["path"].replace("'", "''"))
-        if code != 0:
-            raise RuntimeError(out[-300:] or "Defender ha rifiutato la modifica")
+        items = backup.get("items")
+        if items is None:  # backup delle versioni precedenti: una sola cartella
+            items = [{"path": backup["path"], "existed": backup.get("existed", False)}] if backup.get("path") else []
+        errors = []
+        for it in items:
+            if it.get("existed"):
+                continue  # c'era gia' prima di LagDoctor: non la tolgo
+            code, out = ps("Remove-MpPreference -ExclusionPath '%s' -ErrorAction Stop" % it["path"].replace("'", "''"))
+            if code != 0:
+                errors.append("%s: %s" % (it["path"], out[-200:] or "Defender ha rifiutato la modifica"))
+        if errors:
+            raise RuntimeError("; ".join(errors))
 
 
 def _nagle_values():
@@ -584,11 +616,12 @@ CATALOG = [
              "accensione, utile se dopo giorni di uso il PC scatta di piu'.", "bassa",
              on="powercfg -h off", off="powercfg -h on",
              check="-not (Test-Path \"$env:SystemDrive\\hiberfil.sys\" -ErrorAction SilentlyContinue)"),
-    DefenderExclusionTweak("defender_excl", "Memoria e disco", "Escludi la cartella dei giochi da Defender",
-                           "Defender non scansiona i file del gioco mentre vengono caricati: meno stutter da "
-                           "streaming e caricamenti piu' veloci.", "media", risk=1,
-                           warning="I file in quella cartella non vengono piu' controllati in tempo reale: "
-                                   "metti solo cartelle di giochi da store ufficiali.",
+    DefenderExclusionTweak("defender_excl", "Memoria e disco", "Escludi le cartelle dei giochi da Defender",
+                           "Defender non scansiona i file dei giochi mentre vengono caricati: meno stutter da "
+                           "streaming e caricamenti piu' veloci. Le cartelle dei giochi vengono cercate su tutti "
+                           "i dischi.", "media", risk=1,
+                           warning="I file in quelle cartelle non vengono piu' controllati in tempo reale: "
+                                   "escludi solo cartelle con giochi di cui ti fidi.",
                            recommend=lambda s: None),
 
     # ------------------------------------------------------------ RETE

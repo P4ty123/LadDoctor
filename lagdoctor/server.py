@@ -371,7 +371,7 @@ def job_scan(job):
     return {"problems": probs, "summary": summary, "report": name}
 
 
-def job_apply(job, ids, path):
+def job_apply(job, ids, paths):
     if not STATE["restore_done"]:
         job.msg("Creo un punto di ripristino di Windows (puo' richiedere 1-2 minuti)...")
         ok, msg = tweaks.create_restore_point()
@@ -382,7 +382,7 @@ def job_apply(job, ids, path):
     for tid in ids:
         t = tweaks.BY_ID[tid]
         if isinstance(t, tweaks.DefenderExclusionTweak):
-            t.path = path
+            t.paths, t.path = list(paths), None
         try:
             r = tweaks.apply_one(tid)
             results.append({"id": tid, "name": t.name, "ok": True, "msg": r})
@@ -653,6 +653,13 @@ class Handler(BaseHTTPRequestHandler):
             return gamemode.verify()
         if path == "/api/sessions":
             return {"items": list(reversed(sessions.all_sessions()))}
+        if path == "/api/defender_folders":  # cartelle dei giochi su tutti i dischi, da escludere da Defender
+            from . import games
+            excl = tweaks.DefenderExclusionTweak.exclusions()
+            items = games.library_folders()
+            for it in items:
+                it["excluded"] = None if excl is None else tweaks.DefenderExclusionTweak.covered(it["path"], excl)
+            return {"items": items, "readable": excl is not None}
         if path == "/api/compare":
             a = sessions.get(int(qs["a"][0]))
             b = sessions.get(int(qs["b"][0]))
@@ -711,10 +718,14 @@ class Handler(BaseHTTPRequestHandler):
                 uniq.append(i)
             if any(tweaks.BY_ID[i].risk >= 2 for i in uniq) and b.get("confirm") != "CONFERMO":
                 return 400, {"error": "Per le modifiche rischiose serve la conferma."}
-            path_ = b.get("defender_path") or ""
-            if any(isinstance(tweaks.BY_ID[i], tweaks.DefenderExclusionTweak) for i in uniq) and not os.path.isdir(path_):
-                return 400, {"error": "La cartella per l'esclusione di Defender non esiste: %s" % path_}
-            job = start_job("apply", job_apply, uniq, path_)
+            paths_ = [p for p in (b.get("defender_paths") or [b.get("defender_path") or ""]) if p and p.strip()]
+            if any(isinstance(tweaks.BY_ID[i], tweaks.DefenderExclusionTweak) for i in uniq):
+                if not paths_:
+                    return 400, {"error": "Scegli almeno una cartella da escludere da Defender."}
+                bad = [p for p in paths_ if not os.path.isdir(p.strip().strip('"'))]
+                if bad:
+                    return 400, {"error": "La cartella per l'esclusione di Defender non esiste: %s" % ", ".join(bad)}
+            job = start_job("apply", job_apply, uniq, paths_)
         elif path == "/api/revert":
             job = start_job("revert", job_revert, [i for i in b.get("ids", []) if i in tweaks.BY_ID])
         elif path == "/api/restore_all":

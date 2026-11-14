@@ -219,8 +219,10 @@ doc("defender_excl",
     "Microsoft Defender scansiona ogni file che viene aperto.",
     "I giochi caricano migliaia di file mentre giochi: escluderli evita rallentamenti nei caricamenti e nello "
     "streaming degli asset.",
-    "I file in quella cartella non vengono controllati in tempo reale: metti solo cartelle di giochi da store "
-    "ufficiali (Steam, Epic, Xbox).")
+    "I file in quelle cartelle non vengono controllati in tempo reale: escludi solo cartelle con giochi di cui ti "
+    "fidi (store ufficiali come Steam, Epic, Xbox). LagDoctor propone la cartella che raccoglie i giochi (es. "
+    "...\\steamapps\\common, D:\\Giochi, F:\\XboxGames) su ogni disco; un gioco da solo in una cartella "
+    "qualsiasi (es. Download) viene proposto da solo, per non escludere tutta quella cartella.")
 doc("paging_exec",
     "DisablePagingExecutive impedisce a Windows di spostare driver e kernel nel file di paging.",
     "In teoria evita che il kernel debba essere ricaricato dal disco.",

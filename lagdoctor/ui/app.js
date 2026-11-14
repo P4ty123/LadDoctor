@@ -371,6 +371,7 @@ function docHtml(t) {
 }
 function actionHtml(t) {
   if (t.ignored) return `<button class="ghost sm" data-unign="${t.id}" title="Torna tra ${t.recommended === true ? "le consigliate" : "le altre voci"}">Non ignorare</button>`;
+  if (t.needs_path && t.applied && t.status === false) return `<button class="ghost sm" data-addpath="${t.id}" title="Alcuni giochi non sono ancora esclusi (es. installati dopo o su un altro disco)">Aggiungi cartelle</button>`;
   return !t.applied && (!isOn(t) || t.kind === "myth") ? `<button class="ghost sm ign-btn" data-ign="${t.id}" title="Non mostrarla piu' tra quelle da fare: non conta nel punteggio">Ignora</button>` : "";
 }
 async function setIgnored(id, ignore) {
@@ -527,6 +528,7 @@ function renderTweaks() {
   $$("[data-undo]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); revertIds([b.dataset.undo]); }));
   $$("[data-off]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); forceOff(b.dataset.off); }));
   $$("[data-ign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.ign, true); }));
+  $$("[data-addpath]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); applySelected([b.dataset.addpath]); }));
   $$("[data-unign]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); setIgnored(b.dataset.unign, false); }));
   if (S.twCat === OV_CAT) { const rb = $("#ov-refresh"); if (rb) rb.onclick = () => loadOverlays(true); if (!S.ovLoaded) loadOverlays(false); }
   const n = S.sel.size;
@@ -568,21 +570,35 @@ async function applySelected(ids, after) {
   const risky = sel.filter((t) => t.risk >= 2), needsPath = sel.some((t) => t.needs_path);
   const groups = {}; sel.forEach((t) => { if (t.group) (groups[t.group] = groups[t.group] || []).push(t); });
   const dup = Object.values(groups).filter((g) => g.length > 1);
-  let lastDir = "";
-  if (needsPath) { const ss = await api("/api/sessions"); const s = ss.items.find((x) => x.cartella); lastDir = s ? s.cartella.replace(/[\\/][^\\/]+$/, "") : ""; }
+  let libs = [];
+  if (needsPath) {
+    toast("Cerco i giochi su tutti i dischi (anche quelli senza launcher)...", 15000);
+    try { libs = (await api("/api/defender_folders")).items || []; } catch (e) { libs = []; }
+    $("#toast").hidden = true;
+  }
+  const srcName = { steam: "Steam", epic: "Epic", gog: "GOG", xbox: "Xbox", ubisoft: "Ubisoft", pc: "launcher", disco: "trovato sul disco" };
+  const libHtml = libs.map((l, i) => `<label class="def-lib"><input type="checkbox" class="def-cb" data-i="${i}" ${l.excluded ? "checked disabled" : "checked"}>
+      <span><b>${esc(l.path)}</b> <span class="mut">${l.drive ? "disco " + esc(l.drive) + " · " : ""}${l.games.length} ${l.games.length === 1 ? "gioco" : "giochi"}${(l.sources || []).length ? " · " + l.sources.map((s) => srcName[s] || s).join(", ") : ""}${l.excluded ? " · gia' esclusa" : ""}</span><br>
+      <span class="mut" style="font-size:12px">${esc(l.games.slice(0, 6).join(", "))}${l.games.length > 6 ? ", ..." : ""}</span></span></label>`).join("");
   const m = modal(`
     <h2>Applico ${sel.length} modifiche</h2>
     <p class="mut">Prima creo un punto di ripristino di Windows. Ogni modifica si potra' annullare.</p>
     <ul>${sel.map((t) => `<li>${esc(t.name)} <span class="badge ${riskCls[t.risk]}">${t.risk_label}</span></li>`).join("")}</ul>
     ${sel.some((t) => t.closes) ? `<div class="banner"><b>Programmi che verranno chiusi</b><p>Per cambiare l'impostazione dell'overlay LagDoctor chiude: <b>${[...new Set(sel.filter((t) => t.closes).map((t) => t.closes))].join(", ")}</b>. Se stai giocando o scaricando, finisci prima. Poi riaprili quando vuoi: l'overlay resta spento.</p></div>` : ""}
     ${dup.length ? `<p class="mut">Alternative tra loro: applico solo la prima di: ${dup.map((g) => g.map((t) => esc(t.name)).join(" / ")).join("; ")}</p>` : ""}
-    ${needsPath ? `<p><b>Cartella dei giochi da escludere da Defender</b><br><input type="text" id="def-path" style="width:100%" value="${esc(lastDir)}" placeholder="es. D:\\SteamLibrary"></p>` : ""}
+    ${needsPath ? `<div><b>Cartelle dei giochi da escludere da Defender</b>
+      <p class="mut" style="margin:4px 0 8px">${libs.length ? "Trovate su tutti i dischi: dai launcher (Steam, Epic, GOG, Xbox, Ubisoft, EA...) e cercando i giochi senza launcher. Togli la spunta a quelle che non vuoi escludere." : "Nessuna cartella di giochi trovata: scrivila qui sotto."}</p>
+      ${libHtml}
+      <p style="margin-top:8px"><span class="mut">Altre cartelle (facoltativo, separate da ;)</span><br><input type="text" id="def-path" style="width:100%" placeholder="es. D:\\Giochi"></p></div>` : ""}
     ${risky.length ? `<div class="banner"><b>Modifiche rischiose o pericolose</b>${risky.map((t) => `<p><b>${esc(t.name)}</b>: ${esc(t.warning || "")}</p>`).join("")}
       <p>Scrivi <b>CONFERMO</b> per procedere:</p><input type="text" id="confirm" autocomplete="off"></div>` : ""}
     <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="ghost" id="m-cancel">Annulla</button><button id="m-ok">Applica</button></div>`);
   $("#m-cancel", m).onclick = closeModal;
   $("#m-ok", m).onclick = async () => {
-    const body = { ids, confirm: risky.length ? $("#confirm", m).value.trim() : "", defender_path: needsPath ? $("#def-path", m).value.trim().replace(/^"|"$/g, "") : "" };
+    const body = { ids, confirm: risky.length ? $("#confirm", m).value.trim() : "", defender_paths: needsPath ? [...libs.filter((l, i) => { const cb = $(`.def-cb[data-i="${i}"]`, m); return cb && cb.checked && !cb.disabled; }).map((l) => l.path),
+      ...$("#def-path", m).value.split(";").map((p) => p.trim().replace(/^"|"$/g, "")).filter(Boolean)] : [] };
+    if (needsPath && !body.defender_paths.length && !libs.some((l) => l.excluded)) { toast("Scegli almeno una cartella da escludere."); return; }
+    if (needsPath && !body.defender_paths.length) { toast("Le cartelle spuntate sono gia' tutte escluse: niente da fare."); return; }
     if (risky.length && body.confirm !== "CONFERMO") { toast("Scrivi CONFERMO in maiuscolo per le modifiche rischiose."); return; }
     m.innerHTML = '<h2>Applico le modifiche...</h2><div class="spinner"></div><ul class="log" id="m-log"></ul>';
     try {

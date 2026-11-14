@@ -1,3 +1,11 @@
+## LagDoctor 5.24.2
+
+- Animazioni: in Driver video e Ottimizzazioni prima compariva un breve "Leggo le impostazioni..." e la pagina
+  vera appariva di colpo, senza animazione. Ora l'animazione parte sul contenuto vero; il caricamento resta
+  nascosto se dura poco e compare in dissolvenza solo se dura di piu'.
+- Nuova icona con il logo nuovo: barra del titolo della finestra, LagDoctor.exe, installazione, collegamenti e
+  icona vicino all'orologio.
+
 ## LagDoctor 5.24.1
 
 - Animazioni al cambio di scheda: non comparivano sui PC con gli "Effetti di animazione" di Windows spenti

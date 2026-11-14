@@ -87,7 +87,7 @@ function belowTabs() {
 function rendered(old, promise) {
   return Promise.race([promise, new Promise((res) => {
     const mo = new MutationObserver(() => { if (main().firstElementChild !== old) { mo.disconnect(); res(); } });
-    mo.observe(main(), { childList: true }); setTimeout(() => { mo.disconnect(); res(); }, 5000);
+    mo.observe(main(), { childList: true }); setTimeout(() => { mo.disconnect(); res(); }, 30000);
   })]);
 }
 /* sotto-schede di Ottimizzazioni: categoria o filtro */
@@ -120,8 +120,18 @@ async function go(page, opt = {}) {
     : ({ home, scan, tweaks: tweaksPage, driver, startup, gamemode: gamemodePage, verifica: verificaPage })[page];
   const p = Promise.resolve().then(fn).catch((e) => { main().classList.remove("sw-out", "fade"); throw e; });
   if (!anim) return p;
-  await rendered(old, p.catch(() => {}));
+  const pp = p.catch(() => {});
+  await rendered(old, pp);
   if (tok !== S.navTok) return;
+  /* pagine che prima mostrano "Leggo..." (Driver video, Ottimizzazioni): l'animazione parte sul contenuto vero.
+     Il caricamento resta nascosto se dura poco; se dura di piu' compare in dissolvenza. */
+  const ld = main().children.length === 1 && main().firstElementChild.classList.contains("loading") ? main().firstElementChild : null;
+  if (ld) {
+    const show = setTimeout(() => { if (tok === S.navTok && main().firstElementChild === ld) { main().classList.remove("sw-out", "fade"); animIn([ld]); } }, 450);
+    await rendered(ld, pp);
+    clearTimeout(show);
+    if (tok !== S.navTok) return;
+  }
   main().classList.remove("sw-out", "fade");
   animIn(sub ? belowTabs() : [...main().children]);
 }

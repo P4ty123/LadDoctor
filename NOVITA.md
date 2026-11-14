@@ -1,3 +1,9 @@
+## LagDoctor 5.25.13
+
+- Finestra senza barra di Edge: i crash di WebView2 visti sul PC sono occasionali, quindi LagDoctor non passa piu'
+  per sempre alla finestra di Edge dopo due errori. Passa a Edge solo dopo 4 errori di fila, e ogni apertura
+  riuscita azzera il conteggio (prima bisognava spegnere e riaccendere l'interruttore in Impostazioni).
+
 ## LagDoctor 5.25.12
 
 - Finestra senza barra di Edge: se WebView2 va in crash (puo' capitare in modo occasionale, per esempio cliccando

@@ -1145,7 +1145,8 @@ def quit_all():
 WEBVIEW_FAIL = None  # file che ricorda se la finestra WebView2 ha dato errori con questa versione
 
 
-WEBVIEW_TRIES = 2  # 1: normale, 2: grafica software. Poi finestra di Edge (per questa versione)
+WEBVIEW_TRIES = 4  # errori DI FILA (ogni apertura riuscita azzera): poi finestra di Edge per questa versione
+# I crash di WebView2 visti sui PC veri sono occasionali: un'apertura riuscita vuol dire che la finestra nuova va.
 
 
 def _webview_failures():
@@ -1289,6 +1290,8 @@ def _open_webview(url, minimized=False):
             else:
                 stuck_since = None
         if code == 0:  # chiusa da te (X): come prima, LagDoctor resta vicino all'orologio
+            if _webview_failures():
+                reset_webview_failures()  # ha funzionato: gli errori di prima erano occasionali
             _window_closed(proc)
             return
         if STATE.get("quitting"):
@@ -1302,7 +1305,7 @@ def _open_webview(url, minimized=False):
         _remember_webview_failure()
         # il crash di WebView2 puo' essere occasionale (es. un clic proprio mentre si apre): prima di passare a
         # Edge riprovo SUBITO una volta, con la grafica in software, senza dover chiudere e riaprire LagDoctor
-        if not STATE.get("webview_retried") and _webview_failures() < WEBVIEW_TRIES:
+        if not STATE.get("webview_retried") and _webview_failures() < WEBVIEW_TRIES - 1:
             STATE["webview_retried"] = True
             STATE.pop("webview_failed", None)
             log_error_text("Riprovo subito la finestra nuova con la grafica in software")

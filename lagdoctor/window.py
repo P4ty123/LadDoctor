@@ -131,15 +131,20 @@ class Watch:
         if self._attached:  # "loaded" arriva a ogni caricamento della pagina: collego una volta sola
             return
         self._attached = True
+        # TUTTO dentro il thread della finestra e senza aspettarlo (BeginInvoke). Leggere WebView2 da un altro
+        # thread richiede il thread della finestra, che per entrare in Python aspetta il GIL tenuto da chi legge:
+        # blocco reciproco (5.25.3 e 5.25.4: "non risponde" 3-6 secondi dopo l'apertura, visto su Windows).
+        def f():
+            try:
+                core = self._window.native.browser.webview.CoreWebView2
+                core.ProcessFailed += self._failed
+                _log("fase: pagina caricata, finestra aperta (WebView2 %s)" % core.Environment.BrowserVersionString)
+            except Exception:
+                import traceback
+                _log("controllo di WebView2 non attivo:\n" + traceback.format_exc())
         try:
             from System import Action
-            form = self._window.native
-            core = form.browser.webview.CoreWebView2
-
-            def f():
-                core.ProcessFailed += self._failed
-            form.Invoke(Action(f)) if form.InvokeRequired else f()
-            _log("fase: pagina caricata, finestra aperta (WebView2 %s)" % getattr(core.Environment, "BrowserVersionString", "?"))
+            self._window.native.BeginInvoke(Action(f))
         except Exception:
             import traceback
             _log("controllo di WebView2 non attivo:\n" + traceback.format_exc())

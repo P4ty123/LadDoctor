@@ -165,6 +165,10 @@ def _hang_detector(win):
     bloccata), scrive nel registro dove si trova OGNI thread Python in quel momento: e' il punto del blocco."""
     import faulthandler
     state = {"last": time.time(), "dumped": False}
+    try:
+        fh = open(_log_path(), "a", encoding="utf-8")
+    except OSError:
+        return
 
     def pong():
         state["last"] = time.time()
@@ -173,6 +177,11 @@ def _hang_detector(win):
         from System import Action
         while True:
             time.sleep(1)
+            # timer nativo di Python: se per 6 secondi nessuno lo rinnova (finestra bloccata, o Python intero fermo
+            # perche' il thread della finestra tiene il GIL) scrive dove si trova ogni thread, anche senza il GIL
+            if time.time() - state["last"] < 3:
+                fh.write("") ; fh.flush()
+                faulthandler.dump_traceback_later(6, repeat=False, file=fh)
             try:
                 form = win.native
                 if form is None or form.IsDisposed:

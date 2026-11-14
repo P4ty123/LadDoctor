@@ -439,3 +439,20 @@ button.act:disabled{transform:none;opacity:.4;border-color:var(--line2);backgrou
 .del-one svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .del-one:hover{filter:none;color:var(--bad);border-color:rgba(255,92,122,.4);background:rgba(255,92,122,.1);box-shadow:none}
 tr.row-out td{opacity:0;transform:translateX(24px);transition:opacity .25s ease,transform .25s ease}
+
+/* ===================================================================== barra del titolo (finestra senza bordo) */
+.titlebar{display:none}
+body.frameless .titlebar{display:flex;position:fixed;top:0;left:236px;right:0;height:38px;z-index:30;align-items:stretch}
+body.frameless .content{padding-top:38px}
+body.frameless .side{padding-top:14px}
+body.frameless .bar{left:236px}
+.tb-drag{flex:1;display:flex;align-items:center;padding-left:36px;user-select:none;-webkit-app-region:drag}
+.tb-page{font-size:12px;color:var(--mut);letter-spacing:.3px}
+.tb-btns{display:flex;-webkit-app-region:no-drag}
+.tb-btn{width:46px;height:38px;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;color:#c9cde0;display:grid;place-items:center;transition:background .12s,color .12s}
+.tb-btn svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1.1;stroke-linecap:round}
+.tb-btn:hover{filter:none;background:rgba(255,255,255,.08);color:#fff;box-shadow:none}
+.tb-btn.close:hover{background:linear-gradient(135deg,#ff5c7a,#e5484d);color:#fff}
+.tb-btn:active{background:rgba(255,255,255,.14)}
+/* la parte alta della barra laterale si puo' trascinare come la barra del titolo */
+body.frameless .brand{-webkit-app-region:drag}

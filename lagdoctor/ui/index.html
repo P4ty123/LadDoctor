@@ -9,6 +9,15 @@
 <script>window.LD_TOKEN = "__TOKEN__";</script>
 </head>
 <body>
+<!-- barra del titolo di LagDoctor: si usa solo quando la finestra e' senza bordo (WebView2) -->
+<div class="titlebar" id="titlebar">
+  <div class="tb-drag pywebview-drag-region" id="tb-drag"><span class="tb-page" id="tb-page"></span></div>
+  <div class="tb-btns">
+    <button class="tb-btn" id="tb-min" title="Riduci a icona" aria-label="Riduci a icona"><svg viewBox="0 0 10 10"><path d="M1 5.5h8"/></svg></button>
+    <button class="tb-btn" id="tb-max" title="Ingrandisci" aria-label="Ingrandisci"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1.2"/></svg></button>
+    <button class="tb-btn close" id="tb-close" title="Chiudi (LagDoctor resta vicino all'orologio)" aria-label="Chiudi"><svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6"/></svg></button>
+  </div>
+</div>
 <div class="app">
   <aside class="side">
     <div class="brand">

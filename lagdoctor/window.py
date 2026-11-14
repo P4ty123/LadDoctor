@@ -118,6 +118,48 @@ class Api:
         self._window.destroy()
 
 
+class Watch:
+    """Controlla il motore di WebView2: se un suo processo si chiude (la pagina diventa nera) lo scrive nel registro
+    e rimedia: pagina ricaricata, oppure uscita con errore cosi' LagDoctor apre la finestra di Edge."""
+
+    def __init__(self):
+        self._window = None
+        self._fails = 0
+        self._attached = False
+
+    def attach(self):
+        if self._attached:  # "loaded" arriva a ogni caricamento della pagina: collego una volta sola
+            return
+        self._attached = True
+        try:
+            from System import Action
+            form = self._window.native
+            core = form.browser.webview.CoreWebView2
+
+            def f():
+                core.ProcessFailed += self._failed
+            form.Invoke(Action(f)) if form.InvokeRequired else f()
+            _log("finestra aperta (WebView2 %s)" % getattr(core.Environment, "BrowserVersionString", "?"))
+        except Exception:
+            import traceback
+            _log("controllo di WebView2 non attivo:\n" + traceback.format_exc())
+
+    def _failed(self, sender, args):
+        kind = str(getattr(args, "ProcessFailedKind", "?"))
+        reason = str(getattr(args, "Reason", "?"))
+        code = getattr(args, "ExitCode", "?")
+        self._fails += 1
+        _log("processo di WebView2 chiuso: %s (motivo %s, codice %s) - volta n. %d" % (kind, reason, code, self._fails))
+        try:
+            if "BrowserProcessExited" in kind or self._fails > 2:
+                _log("passo alla finestra di Edge")
+                os._exit(FAILED)
+            if "RenderProcess" in kind or "FrameRenderProcess" in kind:
+                sender.Reload()  # pagina nera: la ricarico
+        except Exception:
+            os._exit(FAILED)
+
+
 def main(args):
     url = next((a for a in args if a.startswith("http")), None)
     if not url:
@@ -149,9 +191,12 @@ def main(args):
     try:
         win = webview.create_window("LagDoctor", url + ("&" if "?" in url else "?") + "frameless=1",
                                     width=1280, height=860, min_size=(MIN_W, MIN_H), frameless=True, easy_drag=False,
-                                    shadow=True, background_color="#07080D", js_api=api,
+                                    shadow=False, background_color="#07080D", js_api=api,
                                     minimized="--ridotto" in args)
         api._window = win
+        watch = Watch()
+        watch._window = win
+        win.events.loaded += watch.attach
         icon = os.path.join(paths.RES_DIR, "lagdoctor", "ui", "lagdoctor.ico")
         storage = os.path.join(paths.DATA_TOOLS, "finestra-webview2")
         os.makedirs(storage, exist_ok=True)

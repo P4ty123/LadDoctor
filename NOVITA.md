@@ -1,3 +1,12 @@
+## LagDoctor 5.25.3
+
+- Finestra nuova: dopo pochi secondi poteva diventare tutta nera.
+  - Tolta l'ombra della finestra senza bordo (un effetto di Windows che con WebView2 puo' dare schermate nere).
+  - Se il motore di WebView2 chiude il processo che disegna la pagina, LagDoctor la ricarica da solo; se succede
+    piu' volte, apre la finestra di Edge come prima.
+  - Se la finestra e' in primo piano ma la pagina non risponde da 45 secondi, LagDoctor apre la finestra di Edge.
+  - Ogni problema viene scritto con il motivo in errore-finestra.txt.
+
 ## LagDoctor 5.25.2
 
 - Finestra nuova: trovata la causa del caricamento infinito, del "non risponde" e della chiusura (5.25.0 e

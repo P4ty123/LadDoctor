@@ -8,3 +8,10 @@ Traceback (most recent call last):
 TypeError: 'NoneType' object is not callable
 
 [2026-11-14 01:36:56] Finestra WebView2 chiusa con codice 3: uso la finestra di Edge
+[2026-11-14 01:41:42] Finestra WebView2 chiusa con codice 3: uso la finestra di Edge
+[2026-11-14 01:41:49] controllo di WebView2 non attivo:
+Traceback (most recent call last):
+  File "/home/user/lagdoctor/lagdoctor/window.py", line 135, in attach
+    from System import Action
+ModuleNotFoundError: No module named 'System'
+

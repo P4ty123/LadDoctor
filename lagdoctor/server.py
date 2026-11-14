@@ -1184,14 +1184,42 @@ def _open_webview(url, minimized=False):
             pass
         return False
 
+    def silent_in_front():
+        """Finestra in primo piano (non ridotta) ma la pagina non chiama il programma: pagina morta o nera.
+        Solo in primo piano: dietro a un gioco WebView2 rallenta i timer della pagina e il silenzio e' normale."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            u32 = ctypes.windll.user32
+            fg = u32.GetForegroundWindow()
+            pid = wintypes.DWORD()
+            u32.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+            return pid.value == proc.pid and not u32.IsIconic(fg)
+        except Exception:
+            return False
+
     def watch():
-        stuck_since = None
+        stuck_since = front_since = None
         while True:
             try:
                 code = proc.wait(timeout=2)
                 break
             except subprocess.TimeoutExpired:
                 pass
+            now = time.time()
+            if silent_in_front():
+                front_since = front_since or now
+                if now - front_since > 45 and now - STATE.get("last_req", now) > 45 and now - STATE["window_t"] > 30:
+                    log_error_text("Finestra WebView2 in primo piano ma la pagina non risponde da 45 secondi "
+                                   "(schermata nera?): la chiudo")
+                    try:
+                        proc.kill()
+                    except OSError:
+                        pass
+                    code = -2
+                    break
+            else:
+                front_since = None
             if hung():
                 stuck_since = stuck_since or time.time()
                 if time.time() - stuck_since > 20:  # bloccata da 20 secondi: la chiudo e passo a Edge

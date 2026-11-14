@@ -734,7 +734,15 @@ async function applySelected(ids, after) {
       const job = await runJob(api("/api/apply", body), (j) => logList($("#m-log"), j.messages));
       const res = job.result.results;
       S.sel.clear(); await loadCatalog(true);
-      m.innerHTML = `<h2>Fatto</h2><ul>${res.map((r) => `<li>${r.ok ? "✔" : "✖"} ${esc(r.name)}: <span class="mut">${esc(r.msg)}</span></li>`).join("")}</ul>
+      const ko = res.filter((r) => !r.ok), okN = res.length - ko.length;
+      const title = !ko.length ? `Fatto: ${okN === 1 ? "modifica applicata" : okN + " modifiche applicate"}`
+        : !okN ? (ko.length === 1 ? "Modifica NON riuscita" : `Nessuna modifica riuscita (${ko.length})`)
+        : `${okN} applicate, ${ko.length} NON riuscite`;
+      const ic = { ok: ["✔", "var(--ok)"], reboot: ["⟳", "var(--warn)"], unk: ["?", "var(--warn)"], ko: ["✘", "var(--bad)"] };
+      const line = (r) => { const [i, c] = ic[r.state || (r.ok ? "ok" : "ko")]; return `<li style="list-style:none;margin-left:-18px"><b style="color:${c}">${i}</b> <b>${esc(r.name)}</b>: <span class="${r.ok ? "mut" : ""}" style="${r.ok ? "" : "color:var(--bad)"}">${esc(r.msg)}</span></li>`; };
+      m.innerHTML = `<h2 style="color:${ko.length ? "var(--bad)" : "inherit"}">${title}</h2>
+        ${ko.length ? `<div class="banner" style="border-color:var(--bad)"><b>Non riuscite</b><ul style="margin:6px 0 0">${ko.map(line).join("")}</ul></div>` : ""}
+        ${okN ? `<ul>${res.filter((r) => r.ok).map(line).join("")}</ul>` : ""}
         ${job.result.reboot ? '<div class="banner"><b>Riavvia Windows</b> per completare: alcune modifiche funzionano solo dopo il riavvio. Te lo ricordo anche in alto finche\' non riavvii.</div>' : ""}
         <div class="row" style="justify-content:flex-end">${job.result.reboot ? '<button class="ghost" id="m-reboot">Riavvia ora</button>' : ""}<button id="m-close">Chiudi</button></div>`;
       refreshState().catch(() => {});

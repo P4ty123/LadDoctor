@@ -1,3 +1,14 @@
+## LagDoctor 5.25.8
+
+- "Disattiva risparmio energetico della scheda di rete": non funzionava ("comando non riuscito"). Il comando usato
+  spegneva solo Wake-on-LAN e simili, non "Consenti al computer di spegnere il dispositivo" di Gestione
+  dispositivi. Ora LagDoctor la toglie come si fa a mano (PnPCapabilities della scheda) e la voce vale dopo il
+  riavvio. Annulla rimette tutto com'era.
+- Finestra dopo Applica: non dice piu' "Fatto" se qualcosa non e' andato. Il titolo dice quante modifiche sono
+  riuscite e quante no, e le voci non riuscite sono in rosso in cima con il motivo. Ogni voce viene ricontrollata
+  su Windows subito dopo l'applicazione: se Windows non la mostra attiva risulta NON riuscita (✘), se serve il
+  riavvio lo dice (⟳).
+
 ## LagDoctor 5.25.7
 
 - Game mode con "Chiudi Esplora risorse": a fine partita Esplora risorse torna entro 1-2 secondi (LagDoctor controlla

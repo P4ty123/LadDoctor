@@ -399,6 +399,24 @@ def job_apply(job, ids, paths):
         job.msg("%s: %s" % (t.name, results[-1]["msg"]))
     refresh_statuses(None, [t.id for t in tweaks.CATALOG if t.group in {tweaks.BY_ID[i].group for i in ids}
                             and t.group] + list(ids))
+    # controllo vero dopo l'applicazione: "applicata" solo se Windows la mostra davvero attiva
+    for r in results:
+        if not r["ok"]:
+            continue
+        t, st = tweaks.BY_ID[r["id"]], STATE["statuses"].get(r["id"])
+        if st is True:
+            r["state"] = "ok"
+        elif st is None:
+            r["state"] = "unk"
+            r["msg"] += " (Windows non permette di verificarla)"
+        elif t.reboot:
+            r["state"] = "reboot"
+            r["msg"] = "applicata: funziona dopo il riavvio di Windows"
+        else:
+            r["ok"], r["state"] = False, "ko"
+            r["msg"] = "NON riuscita: dopo l'applicazione Windows non la mostra attiva"
+    for r in results:
+        r.setdefault("state", "ok" if r["ok"] else "ko")
     rb = [r["id"] for r in results if r["ok"] and tweaks.BY_ID[r["id"]].reboot]
     if rb:
         note_reboot(rb)

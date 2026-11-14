@@ -349,8 +349,10 @@ class CmdTweak(Tweak):
 
     def apply(self):
         code, out = ps(self.on, timeout=120)
-        if self.status() is False:
-            raise RuntimeError(self.after_check or ("comando non riuscito: " + out[-300:]))
+        if self.status() is False and not self.reboot:  # con il riavvio lo stato cambia solo dopo: lo dice la verifica
+            raise RuntimeError(self.after_check or ("Windows non ha applicato la modifica" +
+                                                    (": " + out[-300:] if out.strip() else
+                                                     " (nessun messaggio: il dispositivo potrebbe non supportarla)")))
         return {}
 
     def revert(self, backup):
@@ -530,6 +532,9 @@ class DefenderExclusionTweak(Tweak):
             raise RuntimeError("; ".join(errors))
 
 
+NIC_CLASS = "$cls = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}'; "
+
+
 def _nagle_values():
     """Le interfacce di rete con un indirizzo IP (quelle davvero in uso)."""
     base = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
@@ -694,14 +699,39 @@ CATALOG = [
              "Windows non usa la tua connessione per inviare aggiornamenti ad altri PC su Internet.",
              "media", values=[("HKLM", r"SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization",
                                "DODownloadMode", DWORD, 0)]),
+    # "Consenti al computer di spegnere il dispositivo" (Gestione dispositivi > scheda di rete > Risparmio energia):
+    # Disable-NetAdapterPowerManagement da solo NON la cambia (spegne solo Wake-on-LAN e simili). Il modo
+    # affidabile, uguale a togliere la spunta a mano, e' PnPCapabilities = 24 nella chiave del driver della scheda.
     CmdTweak("nic_power", "Rete", "Disattiva risparmio energetico della scheda di rete",
              "Evita che la scheda di rete (soprattutto Wi-Fi) vada in risparmio causando picchi di ping.",
-             "media",
-             on="Get-NetAdapter -Physical | Disable-NetAdapterPowerManagement -NoRestart",
-             off="Get-NetAdapter -Physical | Enable-NetAdapterPowerManagement -NoRestart",
-             check="$a = Get-NetAdapter -Physical | Where-Object Status -eq 'Up' | Get-NetAdapterPowerManagement "
-                   "-ErrorAction SilentlyContinue; if (-not $a) { 'unknown' } else "
-                   "{ -not ($a | Where-Object { $_.AllowComputerToTurnOffDevice -eq 'Enabled' }) }"),
+             "media", reboot=True,
+             on=NIC_CLASS + "foreach ($n in Get-NetAdapter -Physical) { "
+                "try { Set-NetAdapterPowerManagement -Name $n.Name -AllowComputerToTurnOffDevice Disabled -NoRestart "
+                "-ErrorAction Stop } catch {}; "
+                "Get-ChildItem $cls -ErrorAction SilentlyContinue | ForEach-Object { "
+                "$p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue; "
+                "if ($p.NetCfgInstanceId -eq $n.InterfaceGuid) { Set-ItemProperty -LiteralPath $_.PSPath "
+                "-Name PnPCapabilities -Value 24 -Type DWord } } }; "
+                "Get-NetAdapter -Physical | Disable-NetAdapterPowerManagement -NoRestart -ErrorAction SilentlyContinue",
+             off=NIC_CLASS + "foreach ($n in Get-NetAdapter -Physical) { "
+                 "Get-ChildItem $cls -ErrorAction SilentlyContinue | ForEach-Object { "
+                 "$p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue; "
+                 "if ($p.NetCfgInstanceId -eq $n.InterfaceGuid -and $p.PnPCapabilities -eq 24) { "
+                 "Remove-ItemProperty -LiteralPath $_.PSPath -Name PnPCapabilities } }; "
+                 "try { Set-NetAdapterPowerManagement -Name $n.Name -AllowComputerToTurnOffDevice Enabled -NoRestart "
+                 "-ErrorAction Stop } catch {} }; "
+                 "Get-NetAdapter -Physical | Enable-NetAdapterPowerManagement -NoRestart -ErrorAction SilentlyContinue",
+             # attiva se, per ogni scheda collegata, il risparmio e' spento (proprieta' di Windows o PnPCapabilities)
+             check=NIC_CLASS + "$up = @(Get-NetAdapter -Physical | Where-Object Status -eq 'Up'); "
+                   "if ($up.Count -eq 0) { 'unknown' } else { $bad = 0; foreach ($n in $up) { "
+                   "$pm = Get-NetAdapterPowerManagement -Name $n.Name -ErrorAction SilentlyContinue; "
+                   "$cap = $null; Get-ChildItem $cls -ErrorAction SilentlyContinue | ForEach-Object { "
+                   "$p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue; "
+                   "if ($p.NetCfgInstanceId -eq $n.InterfaceGuid) { $cap = $p.PnPCapabilities } }; "
+                   "if (-not ($cap -eq 24 -or ($pm -and $pm.AllowComputerToTurnOffDevice -ne 'Enabled'))) { $bad++ } }; "
+                   "$bad -eq 0 }",
+             after_check="Windows non ha accettato la modifica per la scheda di rete (il driver potrebbe non "
+                         "permetterlo). Prova da Gestione dispositivi > Schede di rete > scheda > Risparmio energia."),
     RegTweak("nagle", "Rete", "Disattiva algoritmo di Nagle",
              "Invia subito i piccoli pacchetti TCP. Aiuta solo i giochi che usano TCP (alcuni MMO, vecchi "
              "giochi); la maggior parte degli sparatutto usa UDP e non cambia nulla.", "bassa", risk=1,

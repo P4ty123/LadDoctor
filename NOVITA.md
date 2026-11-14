@@ -1,3 +1,11 @@
+## LagDoctor 5.25.12
+
+- Finestra senza barra di Edge: se WebView2 va in crash (puo' capitare in modo occasionale, per esempio cliccando
+  mentre la finestra si sta aprendo) LagDoctor riprova SUBITO da solo con la grafica in software, invece di passare
+  a Edge e riprovare solo all'apertura successiva (che dopo un aggiornamento ripartiva da capo).
+- Non viene piu' scritto in errore.txt "Connessione interrotta" quando la pagina si chiude mentre LagDoctor
+  risponde: non era un errore.
+
 ## LagDoctor 5.25.11
 
 - Game mode spenta mentre si gioca: ora si aspetta che il ripristino finisca (fino a 2 minuti: far ripartire i

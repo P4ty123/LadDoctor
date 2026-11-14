@@ -593,6 +593,8 @@ class Handler(BaseHTTPRequestHandler):
                 with open(path, "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             return self._send(200, self.api_get(u.path, qs))
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            return  # la pagina si e' chiusa (o ricaricata) mentre rispondevo: non e' un errore
         except Exception as e:
             log_error()
             return self._send(500, {"error": str(e)})
@@ -611,6 +613,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             code, body = self.api_post(u.path, self._body())
             return self._send(code, body)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            return  # la pagina si e' chiusa (o ricaricata) mentre rispondevo: non e' un errore
         except Exception as e:
             log_error()
             return self._send(500, {"error": str(e)})
@@ -1296,6 +1300,14 @@ def _open_webview(url, minimized=False):
             ": la prossima volta riprovo con la grafica in software" if _webview_failures() + 1 < WEBVIEW_TRIES
             else ": d'ora in poi uso la finestra di Edge con questa versione"))
         _remember_webview_failure()
+        # il crash di WebView2 puo' essere occasionale (es. un clic proprio mentre si apre): prima di passare a
+        # Edge riprovo SUBITO una volta, con la grafica in software, senza dover chiudere e riaprire LagDoctor
+        if not STATE.get("webview_retried") and _webview_failures() < WEBVIEW_TRIES:
+            STATE["webview_retried"] = True
+            STATE.pop("webview_failed", None)
+            log_error_text("Riprovo subito la finestra nuova con la grafica in software")
+            if _open_webview(url, minimized and time.time() - STATE["window_t"] < 10):
+                return
         _open_edge(url, minimized and time.time() - STATE["window_t"] < 10)
     threading.Thread(target=watch, daemon=True).start()
     return True

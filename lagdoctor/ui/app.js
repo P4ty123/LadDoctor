@@ -60,9 +60,10 @@ function logList(el, msgs) { el.innerHTML = msgs.map((m) => "<li>" + esc(m) + "<
 
 /* ------------------------------------------------------------------ navigazione */
 /* animazioni: la scheda vecchia scompare, la nuova entra dal basso (niente animazioni se Windows le ha spente) */
-const RM_SYS = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-/* animazioni spente da Impostazioni (S.noAnim) o da Windows */
-const noAnim = () => RM_SYS || !!S.noAnim;
+/* animazioni: decide solo l'interruttore in Impostazioni (S.noAnim). Non seguono "Effetti di animazione" di
+   Windows: molti lo spengono per le prestazioni (anche le ottimizzazioni degli effetti visivi) e le animazioni
+   di LagDoctor sparirebbero anche con l'interruttore acceso. */
+const noAnim = () => !!S.noAnim;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* con una barra fissa dentro (.bar) solo dissolvenza: lo spostamento la farebbe saltare */
 const animCls = (el) => (el === main() || el.querySelector(".bar") || el.classList.contains("bar")) ? "fade" : "";
@@ -1377,7 +1378,7 @@ async function settingsDialog() {
   const m = modal(`<h2>Impostazioni</h2>
     ${row("set-auto", "Avvia LagDoctor con Windows", "LagDoctor si apre da solo circa 15 secondi dopo l'accesso a Windows, gia' con i permessi di amministratore (nessuna richiesta di conferma). L'hardware non viene riletto: le impostazioni si controllano in background.", s.autostart)}
     ${row("set-min", "Ridotto a icona", "All'avvio con Windows LagDoctor parte solo come icona vicino all'orologio, senza aprire la finestra: clicca l'icona quando ti serve.", s.minimized, !s.autostart)}
-    ${row("set-anim", "Animazioni", "Quando cambi scheda la pagina vecchia scompare e la nuova entra con un'animazione. Spegnile per cambi di scheda istantanei." + (RM_SYS ? " <b>Ora sono spente anche da Windows</b> (Impostazioni di Windows &gt; Accessibilita' &gt; Effetti visivi &gt; Effetti di animazione)." : ""), s.animations !== false)}
+    ${row("set-anim", "Animazioni", "Quando cambi scheda la pagina vecchia scompare e la nuova entra con un'animazione. Spegnile per cambi di scheda istantanei.", s.animations !== false)}
     <p class="mut" style="font-size:12.5px">Chiudendo la finestra con la X, LagDoctor resta acceso tra le icone vicino all'orologio (in basso a destra). Per chiuderlo davvero: tasto destro sull'icona &gt; <b>Esci</b>, oppure il pulsante Esci qui a sinistra.</p>
     ${s.autostart && !s.task ? '<p style="color:#e8a23a;font-size:13px">L\'avvio con Windows non risulta attivo: riattivalo.</p>' : ""}
     <p class="mut" style="font-size:12px">La game mode ha un suo avvio automatico separato (pagina Game mode): funziona anche con LagDoctor chiuso.</p>

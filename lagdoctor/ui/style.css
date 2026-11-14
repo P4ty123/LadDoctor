@@ -429,7 +429,6 @@ button.big .rdot{width:11px;height:11px;border-radius:50%;background:#fff;box-sh
 @keyframes swFade{from{opacity:0}to{opacity:1}}
 .sw-in{animation:swIn .36s cubic-bezier(.2,.75,.25,1) both}
 .sw-in.fade{animation-name:swFade}
-@media (prefers-reduced-motion:reduce){.sw-in{animation:none}.sw-out{transition:none}}
 .sess-tools{display:flex;align-items:center;gap:14px;margin:0 0 10px;flex-wrap:wrap}
 .sess-tools label.chk{display:flex;gap:7px;align-items:center;font-size:13px;color:var(--mut);cursor:pointer}
 .sess-tools input{accent-color:var(--a1);width:15px;height:15px}

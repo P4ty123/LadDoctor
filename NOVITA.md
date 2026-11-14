@@ -1,3 +1,9 @@
+## LagDoctor 5.24.1
+
+- Animazioni al cambio di scheda: non comparivano sui PC con gli "Effetti di animazione" di Windows spenti
+  (spesso li spengono le ottimizzazioni degli effetti visivi). Ora decide solo l'interruttore Impostazioni >
+  Animazioni.
+
 ## LagDoctor 5.24.0
 
 - Animazioni al cambio di scheda: la pagina vecchia scompare e la nuova entra dal basso, sia per le schede del

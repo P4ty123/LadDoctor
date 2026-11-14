@@ -1,3 +1,15 @@
+## LagDoctor 5.22.1
+
+- Esclusioni di Defender, ricerca dei giochi sui dischi piu' precisa (niente programmi scambiati per giochi):
+  - Launcher e client non sono piu' proposti come giochi: Epic Games Launcher, GOG Galaxy, REDlauncher di
+    CD Projekt, Minecraft Launcher, Battle.net, EA, Riot Client, Ubisoft Connect.
+  - Strumenti e mod non sono piu' proposti: OptiScaler, ReShade, Special K, emulatori di Steam/Epic/GOG
+    (Goldberg, Nemirtingas), bypass, trainer e gli strumenti di Nucleus Co-op.
+  - Le DLL di DLSS / FSR / XeSS non bastano piu' per dire che una cartella e' un gioco (le hanno anche le mod).
+    Una DLL di Steam, Epic, GOG, Bink, FMOD, PhysX o di un anti-cheat conta solo se nella cartella ci sono anche
+    un .exe e i dati di un gioco (archivi .pak, .arc, .bundle... o cartelle come Data, Content, Paks).
+  - La cartella di un client (es. GOG Galaxy) non viene piu' proposta come "raccolta di giochi".
+
 ## LagDoctor 5.22.0
 
 - "Escludi le cartelle dei giochi da Defender" (prima "...la cartella..."):

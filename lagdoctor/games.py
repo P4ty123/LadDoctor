@@ -352,10 +352,24 @@ def too_generic(path):
 
 # ---------------------------------------------------------------- ricerca su tutti i dischi (giochi senza launcher)
 # File che si trovano quasi solo nella cartella principale di un gioco (motori e SDK per giochi)
-GAME_FILES = {"unityplayer.dll", "gameassembly.dll", "steam_api64.dll", "steam_api.dll", "eossdk-win64-shipping.dll",
-              "galaxy64.dll", "bink2w64.dll", "binkw64.dll", "fmod.dll", "fmodstudio.dll", "physx3_x64.dll",
-              "physx_64.dll", "nvngx_dlss.dll", "amd_fidelityfx_dx12.dll", "libxess.dll", "discord_game_sdk.dll",
-              "uplay_r1_loader64.dll", "upc_r2_loader64.dll", "easyanticheat_x64.dll", "beclient_x64.dll"}
+# Motore Unity: bastano da soli
+GAME_ENGINE_FILES = {"unityplayer.dll", "gameassembly.dll"}
+# SDK per giochi: contano solo se nella cartella ci sono anche un .exe e i dati di un gioco (archivi o cartelle
+# tipiche). Da soli si trovano anche in strumenti ed emulatori (Goldberg, Nemirtingas, bypass, Nucleus Co-op...).
+# Le DLL di DLSS / FSR / XeSS non contano: le hanno anche le mod di upscaling come OptiScaler.
+GAME_SDK_FILES = {"steam_api64.dll", "steam_api.dll", "eossdk-win64-shipping.dll", "galaxy64.dll", "bink2w64.dll",
+                  "binkw64.dll", "fmod.dll", "fmodstudio.dll", "physx3_x64.dll", "physx_64.dll",
+                  "discord_game_sdk.dll", "uplay_r1_loader64.dll", "upc_r2_loader64.dll", "easyanticheat_x64.dll",
+                  "beclient_x64.dll"}
+GAME_DATA_EXT = (".pak", ".pck", ".arc", ".rpf", ".forge", ".bundle", ".assets", ".wad", ".vpk", ".big", ".bnk",
+                 ".wem", ".bik", ".bk2", ".archive", ".cpk", ".bdt", ".ucas", ".utoc", ".gpk", ".upk", ".rgssad",
+                 ".ba2", ".bsa", ".esm", ".tfc", ".xnb", ".vfs", ".nxa")
+GAME_DATA_DIRS = {"data", "content", "assets", "paks", "resources", "packs", "archive", "base", "movies", "sound",
+                  "audio", "maps", "levels", "videos", "bin", "binaries", "game", "localization", "shaders"}
+# launcher, client e strumenti: non sono giochi (nome della cartella o di una cartella che la contiene)
+NOT_GAME_DIR = re.compile(r"launcher|^galaxy|gog galaxy|battle\.net|ea desktop|^origin$|riot client|"
+                          r"ubisoft connect|^uplay$|optiscaler|reshade|special ?k|goldberg|\bemu\b|emu$|"
+                          r"bypass|trainer|cheat ?engine|nucleus|^utils?$|^tools?$|^redist", re.I)
 # cartelle da non visitare (sistema, programmi che non sono giochi, dati)
 SCAN_SKIP = re.compile(r"^(windows|\$.*|system volume information|recovery|perflogs|config\.msi|programdata|"
                        r"msocache|intel|amd|nvidia|drivers|windowsapps|common files|microsoft.*|windows .*|"
@@ -363,8 +377,8 @@ SCAN_SKIP = re.compile(r"^(windows|\$.*|system volume information|recovery|perfl
                        r"node_modules|\..*|__pycache__|site-packages|python\d*|java|jdk.*|jre.*|android|"
                        r"onedrive|dropbox|google drive|icloud.*|steamapps|steam)$", re.I)
 # nome di una cartella che raccoglie giochi (si propone lei invece del singolo gioco)
-GAME_LIB = re.compile(r"games?|giochi|gioco|gaming|juegos|spiele|jeux|steamlibrary|xboxgames|gog|riot|"
-                      r"rockstar|ubisoft|origin|ea |battle\.net|blizzard|emulat|roms", re.I)
+# (non i nomi dei client come "GOG Galaxy": li' dentro ci sono il programma e i suoi file, non i giochi)
+GAME_LIB = re.compile(r"games?|giochi|gioco|gaming|juegos|spiele|jeux|steamlibrary|xboxgames|emulat|roms", re.I)
 
 _SCAN_CACHE = {"t": 0, "data": None}
 
@@ -389,10 +403,11 @@ def _fixed_drives():
 def _looks_like_game(path, real_names):
     """real_names: nomi (come sono sul disco) dentro la cartella."""
     names = {n.lower() for n in real_names}
-    if GAME_FILES & names:
+    if GAME_ENGINE_FILES & names:
         return True
-    if any(n.endswith("_data") for n in names) and "unityplayer.dll" in names:
-        return True
+    if GAME_SDK_FILES & names and any(n.endswith(".exe") for n in names):
+        if any(n.endswith(GAME_DATA_EXT) for n in names) or GAME_DATA_DIRS & names:
+            return True
     # Unreal Engine: <gioco>\Engine + <gioco>\<Progetto>\Binaries\Win64
     if "engine" in names:
         for n in real_names:
@@ -418,6 +433,8 @@ def scan_drives(max_depth=4, budget_s=12.0, roots=None):
                 entries = list(it)
         except OSError:
             continue
+        if depth > 0 and NOT_GAME_DIR.search(os.path.basename(path)):
+            continue  # launcher o strumento: ne' lui ne' le sue sottocartelle
         if depth > 0 and _looks_like_game(path, [e.name for e in entries]):
             found.append(dict(id=_id("disco", path), name=os.path.basename(path), source="disco", dir=path,
                               match="dir"))
@@ -442,7 +459,8 @@ def scan_drives_cached(max_age=600):
 
 def all_game_dirs(scan=True):
     """Giochi dei launcher + giochi trovati sui dischi (senza doppioni, ne' giochi dentro altri giochi)."""
-    games = [g for g in detect() if g.get("dir")]
+    games = [g for g in detect() if g.get("dir") and not NOT_GAME_DIR.search(os.path.basename(os.path.normpath(g["dir"])))
+             and not (g.get("source") == "xbox" and NOT_GAME_DIR.search(g.get("name") or ""))]
     if scan:
         known = [os.path.normcase(g["dir"]) for g in games]
         for g in scan_drives_cached():

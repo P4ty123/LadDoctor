@@ -136,8 +136,11 @@ doc("plan_high",
     "Consumi e temperature a riposo un po' piu' alti. Sui Ryzen recenti il piano Bilanciato e' gia' ottimizzato "
     "da AMD: spesso nessuna differenza.")
 doc("plan_ultimate",
-    "Piano nascosto di Windows pensato per workstation: elimina ogni micro-risparmio energetico.",
-    "Latenza minima nel passaggio da riposo a carico.",
+    "'Prestazioni eccellenti' (Ultimate Performance) e' il piano nascosto di Windows pensato per workstation: "
+    "elimina ogni micro-risparmio energetico. Se non c'e', LagDoctor lo crea con il comando classico "
+    "powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 e lo attiva.",
+    "La CPU resta pronta a frequenze alte: latenza minima nel passaggio da riposo a carico. Le altre impostazioni "
+    "energetiche applicate da LagDoctor (core parking, boost...) vengono portate anche in questo piano.",
     "Consuma di piu' anche quando il PC non fa niente. Sui portatili sconsigliato.")
 doc("core_parking",
     "Il core parking 'spegne' i core della CPU che non servono per risparmiare energia.",

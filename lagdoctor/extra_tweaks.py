@@ -283,12 +283,24 @@ class PowerOverlayTweak(Tweak):
         v, _ = T.reg_read("HKLM", T.POWER_KEY + "\\User\\PowerSchemes", "ActiveOverlayAcPowerScheme")
         return (v or "00000000-0000-0000-0000-000000000000").lower()  # assente = Bilanciato normale
 
+    ULTIMATE = "e9a42b02-d5df-448d-aa00-03f14749eb61"
+    changes_plan = True  # dopo l'applicazione core parking, boost... vanno portati nel nuovo piano
+
+    def _ultimate(self):
+        """Il piano 'Prestazioni eccellenti' (Ultimate Performance): esiste solo come copia, la cerco per nome."""
+        return T.PowerPlanTweak("_ultimate", self.cat, "Prestazioni eccellenti", "", "bassa", guid=self.ULTIMATE,
+                                duplicate=True, names=("ultimate performance", "prestazioni eccellenti",
+                                                       "prestazioni ottimali"))
+
     def status(self):
-        if T._active_scheme() != self.BALANCED:
-            self.note = "non disponibile: il piano energetico attivo non e' Bilanciato"
-            return None
         self.note = None
-        return self._current() == self.BEST
+        if self._ultimate().status():
+            self.note = "piano 'Prestazioni eccellenti' attivo"
+            return True
+        if T._active_scheme() == self.BALANCED and self._current() == self.BEST:
+            self.note = "Bilanciato con modalita' 'Prestazioni migliori'"
+            return True
+        return False
 
     def _set(self, guid):
         if run(["powercfg", "/overlaysetactive", guid])[0] == 0:
@@ -299,21 +311,27 @@ class PowerOverlayTweak(Tweak):
             return False
 
     def apply(self):
-        if T._active_scheme() != self.BALANCED:
-            raise RuntimeError("questa modalita' esiste solo con il piano energetico Bilanciato (ora ne usi un altro)")
-        prev = self._current()
-        if not self._set(self.BEST):
-            raise RuntimeError("Windows non ha accettato la modalita' Prestazioni migliori")
-        return {"prev": prev}
+        """Attiva il piano 'Prestazioni eccellenti'; se sul PC non c'e' lo crea come fa il comando classico
+        powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61."""
+        ult = self._ultimate()
+        b = ult.apply()
+        if not ult.status():
+            raise RuntimeError("Windows non ha attivato il piano 'Prestazioni eccellenti'")
+        return {"plan_prev": b.get("prev")}
 
     def revert(self, backup):
-        self._set(backup.get("prev") or "00000000-0000-0000-0000-000000000000")
+        if backup.get("plan_prev"):
+            run(["powercfg", "/setactive", backup["plan_prev"]])
+        elif backup.get("prev") is not None:  # applicata con una versione precedente (modalita' del Bilanciato)
+            self._set(backup.get("prev") or "00000000-0000-0000-0000-000000000000")
 
 
 WINSET = [
-    PowerOverlayTweak("power_mode_best", "CPU ed energia", "Modalita' risparmio energia: Prestazioni migliori",
-                      "Impostazioni > Sistema > Alimentazione: la CPU usa il profilo piu' reattivo del piano "
-                      "Bilanciato.", "bassa"),
+    PowerOverlayTweak("power_mode_best", "CPU ed energia", "Prestazioni migliori: piano 'Prestazioni eccellenti'",
+                      "Attiva il piano energetico 'Prestazioni eccellenti' (Ultimate Performance): nessun risparmio "
+                      "energetico su CPU e PCI Express. Se il piano non c'e' sul PC, LagDoctor lo crea da solo "
+                      "(come il comando powercfg -duplicatescheme). Annulla rimette il piano di prima.", "bassa",
+                      group="plan", warning="Consuma di piu' anche a riposo: sui portatili a batteria meglio di no."),
     RegTweak("start_web_off", "Interfaccia e input", "Ricerca nel menu Start senza risultati web (Bing)",
              "La ricerca del menu Start non interroga piu' Bing: piu' veloce e senza traffico in background.",
              "bassa", values=[("HKCU", r"Software\Policies\Microsoft\Windows\Explorer",

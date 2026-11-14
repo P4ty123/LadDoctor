@@ -1,3 +1,17 @@
+## LagDoctor 5.25.7
+
+- Game mode con "Chiudi Esplora risorse": a fine partita Esplora risorse torna entro 1-2 secondi (LagDoctor controlla
+  ogni secondo se il gioco e' ancora aperto e lo riapre prima di tutto il resto).
+- Tolto il rettangolo nero in basso a sinistra: erano le finestre ridotte a icona mentre mancava la barra delle
+  applicazioni. Ora durante il gioco restano invisibili e alla fine tornano sulla barra delle applicazioni.
+- Piani energetici: c'e' una sola voce, "Piano energetico 'Prestazioni eccellenti'" (Ultimate Performance). Se sul
+  PC non c'e', LagDoctor lo crea da solo (powercfg -duplicatescheme). Tolte "Prestazioni elevate" e
+  "Prestazioni migliori" (restano annullabili se applicate prima).
+- Core parking, boost aggressivo, stato minimo CPU e le altre impostazioni energetiche applicate da LagDoctor ora
+  vengono portate anche nel nuovo piano quando si attiva "Prestazioni eccellenti" e quando la game mode cambia
+  piano durante il gioco (prima restavano solo nel piano di prima e in gioco non avevano effetto).
+- Game mode, opzione del piano energetico: ora usa "Prestazioni eccellenti" invece di "Prestazioni elevate".
+
 ## LagDoctor 5.25.6
 
 - Game mode con "Chiudi Esplora risorse": a fine partita Esplora risorse viene riaperto PER PRIMO (prima veniva

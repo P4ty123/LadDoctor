@@ -627,10 +627,12 @@ CATALOG = [
                    "La CPU resta a frequenze alte. Sui Ryzen recenti il piano Bilanciato va gia' bene: "
                    "differenza piccola.", "bassa", guid="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", group="plan",
                    names=("high performance", "prestazioni elevate")),
-    PowerPlanTweak("plan_ultimate", "CPU ed energia", "Piano energetico 'Prestazioni ottimali' (Ultimate)",
-                   "Come Prestazioni elevate ma senza alcun risparmio. Consuma di piu' anche a riposo.",
+    PowerPlanTweak("plan_ultimate", "CPU ed energia", "Piano energetico 'Prestazioni eccellenti'",
+                   "Il piano piu' spinto di Windows (Ultimate Performance): nessun risparmio energetico su CPU e "
+                   "PCI Express. Se sul PC non c'e', LagDoctor lo crea da solo (powercfg -duplicatescheme). "
+                   "Consuma di piu' anche a riposo.",
                    "bassa", risk=1, guid="e9a42b02-d5df-448d-aa00-03f14749eb61", duplicate=True, group="plan",
-                   names=("ultimate performance", "prestazioni ottimali"),
+                   names=("ultimate performance", "prestazioni eccellenti", "prestazioni ottimali"),
                    recommend=lambda s: None),
     PowerSettingTweak("core_parking", "CPU ed energia", "Disattiva core parking",
                       "Tiene sempre attivi tutti i core invece di 'parcheggiarli'. Utile soprattutto su "
@@ -1488,7 +1490,7 @@ def apply_one(tid):
     state[tid] = {"backup": backup, "data": datetime.datetime.now().isoformat(timespec="seconds"),
                   "nome": t.name}
     save_state(state)
-    if isinstance(t, PowerPlanTweak):
+    if isinstance(t, PowerPlanTweak) or getattr(t, "changes_plan", False):
         follow_power_settings()
     return "applicata" + (" (serve il riavvio)" if t.reboot else "")
 
@@ -1500,7 +1502,7 @@ def revert_one(tid):
     BY_ID[tid].revert(state[tid]["backup"])
     del state[tid]
     save_state(state)
-    if isinstance(BY_ID[tid], PowerPlanTweak):
+    if isinstance(BY_ID[tid], PowerPlanTweak) or getattr(BY_ID[tid], "changes_plan", False):
         follow_power_settings()
     return "annullata" + (" (serve il riavvio)" if BY_ID[tid].reboot else "")
 
@@ -1514,8 +1516,8 @@ def follow_power_settings():
         t = BY_ID.get(tid)
         if isinstance(t, PowerSettingTweak) and isinstance(item, dict) and "backup" in item:
             b = item["backup"]
-            if "schemes" not in b:  # backup delle versioni precedenti: era il piano attivo di allora
-                continue
+            if "schemes" not in b:  # backup delle versioni precedenti (solo valori del piano di allora)
+                b = dict(b, schemes={})
             nb = t.follow(b)
             if nb is not b:
                 item["backup"] = nb
@@ -1586,6 +1588,9 @@ _ov.register()
 # GlobalTimerResolutionRequests e' ora parte di "Timer Resolution 0,5 ms": tolgo la voce separata dall'elenco
 # (resta annullabile se era stata applicata; applicando il Timer Resolution viene sostituita, stesso gruppo).
 CATALOG[:] = [t for t in CATALOG if t.id != "timer_global"]
+# un solo piano energetico nel catalogo: "Prestazioni eccellenti" (plan_ultimate). Le voci "Prestazioni elevate" e
+# "Prestazioni migliori" restano solo per poterle annullare se applicate con una versione precedente.
+CATALOG[:] = [t for t in CATALOG if t.id not in ("plan_high", "power_mode_best")]
 
 # Consigliate anche se non sono "alta/media efficacia": utili su qualsiasi PC, nessuna controindicazione pratica,
 # tutte annullabili. Cosi' "Seleziona consigliate" le applica tutte insieme.

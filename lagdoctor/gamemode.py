@@ -41,6 +41,7 @@ LAUNCH_TASK = "LagDoctor Avvio utente"
 CREATE_NO_WINDOW = 0x08000000
 POLL = 5.0  # secondi tra un controllo e l'altro dei processi aperti
 GRACE = 6.0  # secondi senza giochi prima di spegnere (alcuni giochi si riavviano da soli all'avvio)
+SHELL_GRACE = 1.5  # Esplora risorse invece torna appena il gioco si chiude
 AC_WAIT = 8.0  # secondi di attesa prima di toccare un gioco nuovo (per vedere se parte un anti-cheat)
 
 PRIORITY = {"high": ("Alta", 0x00000080, 4), "above": ("Superiore al normale", 0x00008000, 3),
@@ -119,8 +120,9 @@ OPTIONS = [
      "I pacchetti del gioco vengono marcati con priorita' massima (DSCP 46, come le chiamate VoIP). Insieme al "
      "blocco dei download in background, la connessione resta tutta per il gioco.",
      "La marcatura aiuta solo se il router rispetta la QoS/DSCP; non fa mai danni."),
-    ("power_plan", False, "Piano energetico Prestazioni elevate durante il gioco",
-     "Attiva il piano 'Prestazioni elevate' solo mentre giochi e rimette il tuo piano alla fine.",
+    ("power_plan", False, "Piano energetico 'Prestazioni eccellenti' durante il gioco",
+     "Attiva il piano 'Prestazioni eccellenti' solo mentre giochi (se non c'e' lo crea) e rimette il tuo piano alla "
+     "fine. Core parking, boost e le altre impostazioni energetiche applicate da LagDoctor valgono anche li'.",
      "Se usi gia' un piano energetico personalizzato (di un programma di ottimizzazione o creato da te), lascialo disattivato."),
     ("gpu_pref", False, "Scheda video ad alte prestazioni per i giochi (PC con due schede video)",
      "Sui PC con due schede video (portatili, o processore con grafica integrata + scheda dedicata) Windows a volte "
@@ -175,6 +177,87 @@ MAINT_TASKS = [
 MAINT_PROCS = {"compattelrunner.exe", "devicecensus.exe", "officec2rclient.exe", "dfrgui.exe", "defrag.exe",
                "winsat.exe", "dmclient.exe"}
 WINLOGON_KEY = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+
+
+class _MINMETRICS(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_uint), ("iWidth", ctypes.c_int), ("iHorzGap", ctypes.c_int),
+                ("iVertGap", ctypes.c_int), ("iArrange", ctypes.c_int)]
+
+
+def _minimized_arrange(value=None):
+    """Come Windows dispone le finestre ridotte a icona. Senza Esplora risorse le mostra come piccoli rettangoli
+    in basso a sinistra: con ARW_HIDE (8) restano invisibili, come quando c'e' la barra delle applicazioni.
+    Restituisce il valore di prima."""
+    try:
+        m = _MINMETRICS()
+        m.cbSize = ctypes.sizeof(m)
+        u32 = ctypes.windll.user32
+        u32.SystemParametersInfoW(0x002B, m.cbSize, ctypes.byref(m), 0)  # SPI_GETMINIMIZEDMETRICS
+        prev = m.iArrange
+        if value is not None and value != prev:
+            m.iArrange = value
+            u32.SystemParametersInfoW(0x002C, m.cbSize, ctypes.byref(m), 0)  # SPI_SETMINIMIZEDMETRICS (non salvato)
+        return prev
+    except Exception:
+        return None
+
+
+def _hide_minimized_stubs(timeout=20):
+    """Dopo che Esplora risorse e' ripartito: le finestre ridotte a icona mentre mancava restano come rettangolini
+    in basso a sinistra. Le rimetto ridotte a icona 'normali' (sulla barra delle applicazioni)."""
+    try:
+        from ctypes import wintypes
+        u32 = ctypes.windll.user32
+        t0 = time.time()
+        while time.time() - t0 < timeout and not u32.FindWindowW("Shell_TrayWnd", None):
+            time.sleep(0.3)
+        time.sleep(1.0)  # la barra si registra
+        stubs = []
+        cb = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+        def each(h, _l):
+            if u32.IsWindowVisible(h) and u32.IsIconic(h) and not u32.GetWindow(h, 4):  # GW_OWNER
+                stubs.append(h)
+            return True
+        u32.EnumWindows(cb(each), 0)
+        for h in stubs:
+            u32.ShowWindow(h, 4)  # SW_SHOWNOACTIVATE
+            u32.ShowWindow(h, 7)  # SW_SHOWMINNOACTIVE: di nuovo ridotta, ora sulla barra
+        return len(stubs)
+    except Exception:
+        return 0
+
+
+ULTIMATE = "e9a42b02-d5df-448d-aa00-03f14749eb61"
+
+
+def _ultimate_scheme(create=False):
+    """GUID del piano 'Prestazioni eccellenti' sul PC (e' sempre una copia con un GUID nuovo: lo cerco per nome).
+    create=True: se manca lo crea come fa il comando classico powercfg -duplicatescheme."""
+    code, out = _run(["powercfg", "/list"])
+    for line in out.splitlines():
+        low = line.lower()
+        m = re.search(r"[0-9a-f]{8}-[0-9a-f-]{27}", low)
+        if m and (m.group(0) == ULTIMATE or any(n in low for n in ("ultimate performance", "prestazioni eccellenti",
+                                                                      "prestazioni ottimali"))):
+            return m.group(0)
+    if not create:
+        return None
+    code, out = _run(["powercfg", "-duplicatescheme", ULTIMATE])
+    m = re.search(r"[0-9a-f]{8}-[0-9a-f-]{27}", out.lower())
+    return m.group(0) if m else None
+
+
+def _follow_power():
+    """Le impostazioni energetiche applicate da LagDoctor (core parking, boost, stato minimo CPU...) stanno dentro
+    un piano: quando la game mode passa a Prestazioni elevate le porto anche li'."""
+    try:
+        from . import tweaks as T
+        if not T.STATE_FILE:
+            T.init(paths.DATA_DIR)
+        T.follow_power_settings()
+    except Exception as e:
+        log("impostazioni energetiche nel piano del gioco: %s" % e)
 
 
 def _autorestart_shell(value=None, restore=None):
@@ -784,10 +867,12 @@ class Engine:
         self.act("Game mode ATTIVA per: " + ", ".join(names))
         if opts.get("power_plan"):
             prev = _active_scheme()
-            if prev and _run(["powercfg", "/setactive", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"])[0] == 0:
+            g = _ultimate_scheme(create=True)
+            if prev and g and _run(["powercfg", "/setactive", g])[0] == 0:
                 self.j["power_prev"] = prev
                 self._jsave()
-                self.act("Piano energetico: Prestazioni elevate")
+                self.act("Piano energetico: Prestazioni eccellenti")
+                _follow_power()  # core parking, boost... applicati da LagDoctor anche nel piano del gioco
         if opts.get("timer") and _timer(True):
             self.j["timer"] = True
             self._jsave()
@@ -905,6 +990,10 @@ class Engine:
                             self.j["shell_restart_prev"] = _autorestart_shell(0)
                         except Exception as e:
                             log("AutoRestartShell non modificato: %s" % e)
+                    if self.j.get("minarrange_prev") is None:
+                        prev = _minimized_arrange(0x8)  # ARW_HIDE: niente rettangolini in basso a sinistra
+                        if prev is not None:
+                            self.j["minarrange_prev"] = prev
                     self._jsave()  # prima di chiudere: se qualcosa va storto all'avvio dopo lo riapro
                 p.kill()
                 closed.append(p.info["name"])
@@ -1125,6 +1214,32 @@ class Engine:
         return changed
 
     # -------- disattivazione
+    def restore_shell(self):
+        """Riapre Esplora risorse (se la game mode l'aveva chiuso) e rimette le impostazioni toccate per farlo.
+        Chiamata appena il gioco si chiude, senza aspettare il resto del ripristino."""
+        j = self.j
+        if not j or not (j.get("explorer") or j.get("shell_restart_prev") is not None):
+            return False
+        if j.get("shell_done"):
+            return False
+        if j.get("shell_restart_prev") is not None:
+            try:
+                _autorestart_shell(restore=j["shell_restart_prev"])
+            except Exception as e:
+                log("AutoRestartShell non ripristinato: %s" % e)
+        if j.get("minarrange_prev") is not None:
+            _minimized_arrange(int(j["minarrange_prev"]))
+        launched = False
+        if j.get("explorer") and not any((p.info["name"] or "").lower() == "explorer.exe"
+                                         for p in psutil.process_iter(["name"])):
+            explorer = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "explorer.exe")
+            launched = launch_as_user(explorer, fast=True) or launch_as_user(explorer)
+            threading.Thread(target=_hide_minimized_stubs, daemon=True).start()
+        j["shell_done"] = True
+        self._jsave()
+        log("Esplora risorse riaperto" if launched else "Esplora risorse: niente da riaprire")
+        return launched
+
     def deactivate(self, reason="nessun gioco aperto"):
         if self.j is None:
             return
@@ -1132,16 +1247,7 @@ class Engine:
         log("Disattivo la game mode (%s)" % reason)
         # PRIMA di tutto Esplora risorse: barra delle applicazioni e desktop tornano subito (il resto, piu' lento,
         # viene ripristinato dopo, mentre usi gia' il PC)
-        if j.get("shell_restart_prev") is not None:
-            try:
-                _autorestart_shell(restore=j["shell_restart_prev"])
-            except Exception as e:
-                log("AutoRestartShell non ripristinato: %s" % e)
-        if j.get("explorer") and not any((p.info["name"] or "").lower() == "explorer.exe"
-                                         for p in psutil.process_iter(["name"])):
-            explorer = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "explorer.exe")
-            if not launch_as_user(explorer, fast=True):
-                launch_as_user(explorer)
+        self.restore_shell()
         # priorita' e affinita' dei giochi ancora aperti (se la game mode viene spenta durante il gioco)
         for pid, info in list(self.game_pids.items()):
             try:
@@ -1328,6 +1434,9 @@ class Watcher:
                 k = e.kill_maintenance()  # partiti da altro (raro): chiusi, senza attivita' che li rilanci
                 if k:
                     e.act("Manutenzione chiusa di nuovo: " + ", ".join(k))
+        elif e.active and time.time() - self.last_seen > SHELL_GRACE and e.j and e.j.get("explorer") \
+                and not e.j.get("shell_done") and time.time() - self.last_seen <= GRACE:
+            e.restore_shell()  # barra delle applicazioni subito; il resto dopo l'attesa normale
         elif e.active and time.time() - self.last_seen > GRACE:
             e.deactivate()
             self.write_status([], force=True)
@@ -1349,7 +1458,19 @@ class Watcher:
                 self.tick()
             except Exception:
                 log("ERRORE nel ciclo: " + traceback.format_exc()[-1500:])
-            self.stop.wait(POLL)
+            # con Esplora risorse chiuso, tra un controllo e l'altro guardo ogni secondo (costa quasi zero) se i
+            # processi del gioco ci sono ancora: appena chiudi il gioco la barra delle applicazioni torna subito
+            j = self.engine.j
+            if j and j.get("explorer") and not j.get("shell_done"):
+                waited = 0.0
+                while waited < POLL and not self.stop.is_set():
+                    self.stop.wait(1.0)
+                    waited += 1.0
+                    pids = list(self.engine.game_pids) or list(self.engine.game_seen)
+                    if pids and not any(psutil.pid_exists(p) for p in pids):
+                        break
+            else:
+                self.stop.wait(POLL)
         self.engine.deactivate("game mode spenta")
         _save(STATUS, {"pid": None, "updated": time.time(), "active": False, "games": [], "actions": [],
                        "errors": []})
@@ -1709,7 +1830,8 @@ def verify():
              else "gia' scelta per questi giochi o nessun gioco ancora visto"))
     if opts.get("power_plan"):
         a = _active_scheme()
-        add("Sistema", "Piano Prestazioni elevate", a == "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", a or "non leggibile")
+        g = _ultimate_scheme()
+        add("Sistema", "Piano Prestazioni eccellenti", bool(g) and a == g, a or "non leggibile")
     if opts.get("trim_ram"):
         msg = next((a for a in reversed(st.get("actions") or []) if a.startswith("RAM liberata")), None)
         add("Sistema", "RAM liberata all'avvio del gioco", True if msg else None,

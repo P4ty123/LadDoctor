@@ -20,9 +20,9 @@ _BG = [("game_dvr", "harm"), ("game_mode", "harm"), ("defender_excl", "help"), (
        ("wsearch", "help"), ("sysmain", "help"), ("diagtrack", "help"), ("telemetry_policy", "help"),
        ("widgets_off", "help"), ("edge_bg_off", "help"), ("app_teams", "help"), ("app_onedrive", "help"),
        ("power_throttling", "help"), ("notifications_off", "help"), ("copilot_off", "help")]
-_CPU = [("fix_powersaver", "fix"), ("game_mode", "harm"), ("power_mode_best", "help"), ("virt_off", "help"),
+_CPU = [("fix_powersaver", "fix"), ("game_mode", "harm"), ("plan_ultimate", "help"), ("virt_off", "help"),
         ("timer_res", "help"), ("bg_apps", "help"), ("app_teams", "help"),
-        ("edge_bg_off", "help"), ("widgets_off", "help"), ("plan_high", "help")]
+        ("edge_bg_off", "help"), ("widgets_off", "help")]
 CAUSES = {
     "background": ("Programmi e attivita' in background", _BG),
     "disk": ("Stutter da lettura dal disco (streaming dei dati del gioco)", [
@@ -42,8 +42,8 @@ CAUSES = {
     "main_thread": ("Thread principale della CPU al limite", _CPU),
     "cpu_bound": ("Gioco limitato dalla CPU", _CPU),
     "cpu_throttle": ("CPU che rallenta (energia o calore)", [
-        ("fix_powersaver", "fix"), ("power_mode_best", "help"), ("plan_high", "help"), ("idle_off", "on_bad"),
-        ("min_cpu_100", "on_bad"), ("plan_ultimate", "on_bad")]),
+        ("fix_powersaver", "fix"), ("plan_ultimate", "help"), ("idle_off", "on_bad"),
+        ("min_cpu_100", "on_bad")]),
     "throttle": ("GPU che rallenta (calore o energia)", [
         ("fix_powersaver", "fix"), ("nvfix_minpower", "fix"), ("nv_power_max", "on_bad")]),
     "gpu_bound": ("GPU al limite (frame pacing e input lag)", [

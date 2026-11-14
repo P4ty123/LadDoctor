@@ -1,3 +1,12 @@
+## LagDoctor 5.25.0
+
+- Finestra nuova, senza la barra grigia di Edge in alto: la barra del titolo e' quella di LagDoctor, nello stesso
+  stile del programma, con riduci a icona, ingrandisci e chiudi (rosso quando ci passi sopra). La finestra si
+  trascina dalla barra in alto o dal logo e si ridimensiona dai bordi; funzionano anche Snap (trascinala in alto
+  o ai lati dello schermo) e Win+frecce. Chiudendola LagDoctor resta vicino all'orologio, come prima.
+- La finestra ora usa WebView2 (lo stesso motore di Edge, dentro il programma). Se su un PC WebView2 non funziona,
+  LagDoctor apre da solo la finestra di Edge come prima.
+
 ## LagDoctor 5.24.2
 
 - Animazioni: in Driver video e Ottimizzazioni prima compariva un breve "Leggo le impostazioni..." e la pagina

@@ -14,8 +14,12 @@ datas = [
     (os.path.join(ROOT, "strumenti", "PresentMon-LICENSE.txt"), "strumenti"),
 ]
 hidden = collect_submodules("lagdoctor") + ["autodiagnosi"]
+# finestra WebView2 (lagdoctor/window.py): pywebview + pythonnet. Le DLL di WebView2 e gli script di pywebview li
+# aggiunge il suo hook per PyInstaller; i moduli li indico qui perche' sono importati solo dentro window.main().
+webview_hidden = ["webview", "webview.platforms.winforms", "webview.platforms.edgechromium", "webview.platforms.win32",
+                  "clr", "clr_loader", "pythonnet", "proxy_tools", "bottle"]
 
-gui = Analysis([os.path.join(SPECPATH, "lagdoctor_gui.py")], pathex=[ROOT], datas=datas, hiddenimports=hidden)
+gui = Analysis([os.path.join(SPECPATH, "lagdoctor_gui.py")], pathex=[ROOT], datas=datas, hiddenimports=hidden + webview_hidden)
 helper = Analysis([os.path.join(SPECPATH, "lagdoctor_helper.py")], pathex=[ROOT], hiddenimports=hidden)
 
 gui_exe = EXE(PYZ(gui.pure), gui.scripts, [], exclude_binaries=True, name="LagDoctor", icon=ICON,

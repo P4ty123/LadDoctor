@@ -40,7 +40,7 @@ jobs:
 
       - name: Componenti
         if: env.LD_BUILD == 'true'
-        run: python -m pip install psutil==7.0.0 pyinstaller==6.13.0
+        run: python -m pip install psutil==7.0.0 pyinstaller==6.13.0 pywebview==6.2.1
 
       - name: Eseguibili (PyInstaller)
         if: env.LD_BUILD == 'true'
@@ -52,6 +52,12 @@ jobs:
         run: |
           $p = Start-Process -FilePath "dist\LagDoctor\LagDoctorHelper.exe" -ArgumentList "--verifica" -Wait -PassThru -NoNewWindow
           if ($p.ExitCode -ne 0) { throw "Controllo fallito (codice $($p.ExitCode))" }
+          # finestra WebView2: devono esserci le DLL di WebView2 e di pythonnet (senza, LagDoctor userebbe Edge)
+          foreach ($dll in "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.WinForms.dll", "Python.Runtime.dll") {
+            $f = Get-ChildItem -Path "dist\LagDoctor" -Recurse -Filter $dll -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $f) { throw "Manca $dll nella build: la finestra WebView2 non funzionerebbe" }
+            Write-Host "OK $dll -> $($f.FullName)"
+          }
 
       - name: Installatore (Inno Setup)
         if: env.LD_BUILD == 'true'

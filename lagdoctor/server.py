@@ -980,6 +980,7 @@ def _lagdoctor_windows():
     except Exception:
         return []
     found = []
+    webview_pids = {p.pid for p in _webview_processes()}
 
     def cb(h, _l):
         n = u32.GetWindowTextLengthW(h)
@@ -989,7 +990,7 @@ def _lagdoctor_windows():
             pid = wintypes.DWORD()
             u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
             try:
-                is_edge = psutil.Process(pid.value).name().lower() == "msedge.exe"
+                is_edge = psutil.Process(pid.value).name().lower() == "msedge.exe" or pid.value in webview_pids
             except psutil.Error:
                 is_edge = False
             if is_edge and buf.value.strip().startswith("LagDoctor"):
@@ -999,10 +1000,24 @@ def _lagdoctor_windows():
     return found
 
 
-def _window_processes():
-    """Processi di Edge che usano il profilo dedicato di LagDoctor (solo la finestra di LagDoctor, mai le altre)."""
-    profile = os.path.normcase(os.path.join(paths.DATA_TOOLS, "finestra"))
+def _webview_processes():
+    """Processi della finestra WebView2 di LagDoctor (LagDoctor.exe --finestra)."""
     out = []
+    for p in psutil.process_iter(["name", "cmdline"]):
+        try:
+            if (p.info["name"] or "").lower() in ("lagdoctor.exe", "python.exe", "pythonw.exe") and \
+                    "--finestra" in (p.info["cmdline"] or []):
+                out.append(p)
+        except psutil.Error:
+            continue
+    return out
+
+
+def _window_processes():
+    """Processi di Edge che usano il profilo dedicato di LagDoctor (solo la finestra di LagDoctor, mai le altre)
+    e la finestra WebView2."""
+    profile = os.path.normcase(os.path.join(paths.DATA_TOOLS, "finestra"))
+    out = _webview_processes()
     for p in psutil.process_iter(["name", "cmdline"]):
         try:
             if (p.info["name"] or "").lower() != "msedge.exe":
@@ -1090,7 +1105,62 @@ def quit_all():
     _shutdown()
 
 
+def _webview_available():
+    """La finestra senza barra di Edge si puo' usare? (versione installata, o da sorgente con pywebview)"""
+    if os.name != "nt" or STATE.get("webview_failed"):
+        return False
+    if paths.FROZEN:
+        return True
+    try:
+        import importlib.util
+        return importlib.util.find_spec("webview") is not None
+    except Exception:
+        return False
+
+
+def _window_closed(proc):
+    """La finestra WebView2 si e' chiusa: come il saluto della pagina (/api/bye), per l'icona e l'uscita."""
+    if any(p.pid != proc.pid for p in _webview_processes()):
+        return
+    STATE["bye"] = time.time()
+    if TRAY is not None and TRAY.ok and not STATE.get("tray_hint"):
+        threading.Thread(target=_tray_hint, daemon=True).start()
+
+
+def _open_webview(url, minimized=False):
+    """Apre la finestra WebView2. Se entro 10 secondi si chiude con un errore, apre quella di Edge."""
+    cmd = paths.gui_cmd("--finestra", url, *(["--ridotto"] if minimized else []))
+    try:
+        proc = subprocess.Popen(cmd)
+    except OSError:
+        STATE["webview_failed"] = True
+        return False
+    STATE["window"], STATE["window_t"] = proc, time.time()
+
+    def watch():
+        try:
+            code = proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            code = proc.wait()  # funziona: aspetto che venga chiusa
+            if code == 0:
+                _window_closed(proc)
+            return
+        if code != 0:  # non e' partita (es. WebView2 mancante): finestra di Edge, come prima
+            STATE["webview_failed"] = True
+            _open_edge(url, minimized)
+        else:
+            _window_closed(proc)
+    threading.Thread(target=watch, daemon=True).start()
+    return True
+
+
 def open_window(url, minimized=False):
+    if _webview_available() and _open_webview(url, minimized):
+        return
+    _open_edge(url, minimized)
+
+
+def _open_edge(url, minimized=False):
     edge_paths = [os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
                   os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe")]
     exe = next((p for p in edge_paths if os.path.isfile(p)), None) or shutil.which("msedge")

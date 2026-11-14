@@ -5,6 +5,7 @@
   LagDoctor.exe --timer 5000    tiene il timer di sistema a 0,5 ms (parte con Windows)
   LagDoctor.exe --avvio-windows [--ridotto]   avvio automatico con Windows (eventualmente ridotto a icona)
   LagDoctor.exe --overlay       tiene spenti gli overlay spenti da LagDoctor (parte con Windows)
+  LagDoctor.exe --finestra URL  la finestra del programma (WebView2, avviata da LagDoctor stesso)
 """
 import os
 import sys
@@ -28,7 +29,10 @@ def _fix_child_dll_path():
 def main():
     _fix_child_dll_path()
     args = sys.argv[1:]
-    if args[:1] == ["--gamemode"]:
+    if args[:1] == ["--finestra"]:
+        from lagdoctor import window
+        sys.exit(window.main(args[1:]))
+    elif args[:1] == ["--gamemode"]:
         from lagdoctor import gamemode
         gamemode.main()
     elif args[:1] == ["--overlay"]:

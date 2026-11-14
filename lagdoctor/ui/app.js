@@ -63,13 +63,20 @@ function logList(el, msgs) { el.innerHTML = msgs.map((m) => "<li>" + esc(m) + "<
 /* finestra senza bordo (WebView2): la barra del titolo la disegna LagDoctor */
 const FRAMELESS = !!window.pywebview || /[?&]frameless=1/.test(location.search);
 if (FRAMELESS) document.body.classList.add("frameless");
-const PAGE_NAME = { home: "Panoramica", scan: "Scansione completa", tweaks: "Ottimizzazioni", driver: "Driver video", startup: "Avvio automatico",
-  gamemode: "Game mode", record: "Analizza gioco", verifica: "Verifica completa" };
-const winApi = (a) => (window.pywebview && window.pywebview.api && window.pywebview.api[a] ? window.pywebview.api[a]() : Promise.resolve());
+const winApi = (a, ...args) => (window.pywebview && window.pywebview.api && window.pywebview.api[a] ? window.pywebview.api[a](...args) : Promise.resolve());
 $("#tb-min").onclick = () => winApi("minimize");
 $("#tb-max").onclick = () => winApi("toggle_maximize");
 $("#tb-close").onclick = () => winApi("close");
-$("#tb-drag").ondblclick = () => winApi("toggle_maximize");
+/* trascinare: la barra in alto e il logo. Doppio clic = ingrandisci / ripristina */
+[$("#tb-drag"), $(".brand")].forEach((el) => el.addEventListener("mousedown", (e) => {
+  if (!FRAMELESS || e.button !== 0) return;
+  e.preventDefault();
+  if (e.detail === 2) winApi("toggle_maximize"); else winApi("start_drag");
+}));
+$$("#rz i").forEach((el) => el.addEventListener("mousedown", (e) => { if (e.button === 0) { e.preventDefault(); winApi("start_resize", el.dataset.e); } }));
+/* finestra ingrandita: niente bordi per ridimensionare */
+const syncMax = () => winApi("is_maximized").then((m) => document.body.classList.toggle("maxed", m === true)).catch(() => {});
+if (FRAMELESS) { window.addEventListener("resize", () => setTimeout(syncMax, 60)); window.addEventListener("pywebviewready", syncMax); }
 /* animazioni: decide solo l'interruttore in Impostazioni (S.noAnim). Non seguono "Effetti di animazione" di
    Windows: molti lo spengono per le prestazioni (anche le ottimizzazioni degli effetti visivi) e le animazioni
    di LagDoctor sparirebbero anche con l'interruttore acceso. */
@@ -120,7 +127,6 @@ async function go(page, opt = {}) {
     if (tok !== S.navTok) return;  /* nel frattempo e' stata scelta un'altra scheda */
   }
   S.page = page;
-  if (FRAMELESS) $("#tb-page").textContent = "LagDoctor  ·  " + (PAGE_NAME[page] || "");
   const navPage = page === "scan" || page === "verifica" ? "home" : page;  /* pagine aperte dalla Panoramica */
   $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === navPage));
   clearInterval(S.sensorTimer);

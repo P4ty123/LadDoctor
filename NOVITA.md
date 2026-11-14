@@ -1,3 +1,16 @@
+## LagDoctor 5.22.2
+
+- CPU ed energia, controllate tutte le voci:
+  - Core parking, stato minimo del processore, boost, idle, sospensione USB e ASPM sono impostazioni che stanno
+    DENTRO un piano energetico. Prima, se dopo averle applicate si cambiava piano (es. 'Prestazioni elevate'),
+    smettevano di funzionare, e "Annulla" scriveva i vecchi valori nel piano sbagliato. Ora vengono riportate
+    anche nel nuovo piano e "Annulla" rimette ogni piano com'era.
+  - CPU Intel ibride (12a generazione e successive): "Disattiva core parking" e "Stato minimo processore al
+    100%" agivano solo su una classe di core. Ora valgono anche per i P-core.
+  - "Prestazioni elevate": su molti portatili e PC con Modern Standby Windows nasconde questo piano e la voce
+    dava errore. Ora LagDoctor lo ricrea (come fa gia' per 'Prestazioni ottimali') e lo riconosce per nome.
+  - Gli errori di powercfg ora vengono segnalati invece di risultare "applicata".
+
 ## LagDoctor 5.22.1
 
 - Esclusioni di Defender, ricerca dei giochi sui dischi piu' precisa (niente programmi scambiati per giochi):

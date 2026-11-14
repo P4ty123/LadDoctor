@@ -178,13 +178,14 @@ class ServiceTweak(Tweak):
 POWER_KEY = r"SYSTEM\CurrentControlSet\Control\Power"
 
 
-def _powercfg_reg(sub, setting):
-    """Valore dal registro: quello salvato nel piano attivo, altrimenti il predefinito di Windows per quel piano."""
-    code, out = run(["powercfg", "/getactivescheme"])
-    m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}", out)
-    if not m:
-        return None
-    scheme = m.group(0).lower()
+def _powercfg_reg(sub, setting, scheme=None):
+    """Valore dal registro: quello salvato nel piano, altrimenti il predefinito di Windows per quel piano."""
+    if scheme is None:
+        code, out = run(["powercfg", "/getactivescheme"])
+        m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}", out)
+        if not m:
+            return None
+        scheme = m.group(0).lower()
     base = POWER_KEY + "\\User\\PowerSchemes\\%s\\%s\\%s" % (scheme, sub, setting)
     ac, dc = reg_read("HKLM", base, "ACSettingIndex")[0], reg_read("HKLM", base, "DCSettingIndex")[0]
     if ac is None:
@@ -195,39 +196,89 @@ def _powercfg_reg(sub, setting):
     return ac, (dc if dc is not None else ac)
 
 
-def _powercfg_query(sub, setting):
+def _powercfg_query(sub, setting, scheme=None):
+    """(AC, DC) di un'impostazione nel piano indicato (predefinito: quello attivo), oppure None se non esiste."""
     # /query non mostra le impostazioni NASCOSTE (core parking, boost, idle...): allora /qh e infine il registro
     for opt in ("/query", "/qh"):
-        code, out = run(["powercfg", opt, "SCHEME_CURRENT", sub, setting])
+        code, out = run(["powercfg", opt, scheme or "SCHEME_CURRENT", sub, setting])
         hexes = re.findall(r":\s*(0x[0-9a-fA-F]+)\s*$", out, re.M)
         if code == 0 and len(hexes) >= 2:
             return int(hexes[-2], 16), int(hexes[-1], 16)  # (AC, DC)
-    return _powercfg_reg(sub, setting)
+    return _powercfg_reg(sub, setting, scheme)
 
 
 class PowerSettingTweak(Tweak):
-    def __init__(self, *a, sub, setting, value, **kw):
+    """Impostazione di un piano energetico. extra = stesse impostazioni per la 2a classe di core delle CPU ibride
+    (Intel 12a gen. e successive: P-core); se la CPU non le ha vengono ignorate.
+    Le impostazioni stanno DENTRO un piano: se il piano cambia (es. con 'Prestazioni elevate') LagDoctor le
+    riporta anche nel nuovo piano (follow) e all'annullamento le rimette com'erano in tutti i piani toccati."""
+
+    def __init__(self, *a, sub, setting, value, extra=(), **kw):
         super().__init__(*a, **kw)
-        self.sub, self.setting, self.value = sub, setting, value
+        self.sub, self.setting, self.value, self.extra = sub, setting, value, tuple(extra)
+
+    def _present(self, scheme=None):
+        """Impostazioni che esistono su questo PC: {setting: (ac, dc)}."""
+        out = {}
+        for s in (self.setting,) + self.extra:
+            q = _powercfg_query(self.sub, s, scheme)
+            if q is not None:
+                out[s] = q
+        return out
 
     def status(self):
-        q = _powercfg_query(self.sub, self.setting)
-        return None if q is None else q[0] == self.value
+        cur = self._present()
+        if self.setting not in cur:
+            return None
+        return all(v[0] == self.value for v in cur.values())
 
-    def _set(self, ac, dc):
-        run(["powercfg", "/setacvalueindex", "SCHEME_CURRENT", self.sub, self.setting, str(ac)])
-        run(["powercfg", "/setdcvalueindex", "SCHEME_CURRENT", self.sub, self.setting, str(dc)])
-        run(["powercfg", "/setactive", "SCHEME_CURRENT"])
+    def _write(self, scheme, setting, ac, dc):
+        for opt, v in (("/setacvalueindex", ac), ("/setdcvalueindex", dc)):
+            code, out = run(["powercfg", opt, scheme, self.sub, setting, str(v)])
+            if code != 0:
+                raise RuntimeError("powercfg non ha accettato la modifica: " + out[-200:])
+
+    def _apply_to(self, scheme):
+        cur = self._present(scheme)
+        if self.setting not in cur:
+            raise RuntimeError("impostazione energetica non disponibile")
+        for s in cur:
+            self._write(scheme, s, self.value, self.value)
+        if scheme == _active_scheme():
+            run(["powercfg", "/setactive", scheme])  # rende effettivo il cambio nel piano in uso
+        return {s: list(v) for s, v in cur.items()}
 
     def apply(self):
-        q = _powercfg_query(self.sub, self.setting)
-        if q is None:
-            raise RuntimeError("impostazione energetica non disponibile")
-        self._set(self.value, self.value)
-        return {"ac": q[0], "dc": q[1]}
+        scheme = _active_scheme()
+        if not scheme:
+            raise RuntimeError("piano energetico attivo non leggibile")
+        return {"schemes": {scheme: self._apply_to(scheme)}}
+
+    def follow(self, backup):
+        """Il piano attivo e' cambiato: applico l'impostazione anche li' (una volta). Restituisce il backup."""
+        scheme = _active_scheme()
+        schemes = dict(backup.get("schemes") or {})
+        if not scheme or scheme in schemes:
+            return backup
+        try:
+            schemes[scheme] = self._apply_to(scheme)
+        except RuntimeError:
+            return backup
+        return dict(backup, schemes=schemes)
 
     def revert(self, backup):
-        self._set(backup["ac"], backup["dc"])
+        schemes = backup.get("schemes")
+        if schemes is None:  # backup delle versioni precedenti: un'impostazione del piano attivo
+            schemes = {"SCHEME_CURRENT": {self.setting: [backup["ac"], backup["dc"]]}}
+        active = _active_scheme()
+        for scheme, values in schemes.items():
+            for s, (ac, dc) in values.items():
+                try:
+                    self._write(scheme, s, ac, dc)
+                except RuntimeError:
+                    pass  # piano cancellato nel frattempo: niente da rimettere
+        if active:
+            run(["powercfg", "/setactive", active])
 
 
 def _active_scheme():
@@ -237,21 +288,29 @@ def _active_scheme():
 
 
 class PowerPlanTweak(Tweak):
-    def __init__(self, *a, guid, duplicate=False, **kw):
+    """names: come si chiama il piano in /list (inglese e italiano), per trovarne la copia con un GUID nuovo."""
+
+    def __init__(self, *a, guid, duplicate=False, names=(), **kw):
         super().__init__(*a, **kw)
-        self.guid, self.duplicate = guid, duplicate
+        self.guid, self.duplicate, self.names = guid, duplicate, tuple(n.lower() for n in names)
 
     def _find(self):
-        """Per Ultimate Performance Windows crea una copia con un GUID nuovo: la cerco per nome."""
-        if not self.duplicate:
-            return self.guid
+        """GUID del piano sul PC. Ultimate Performance esiste solo come copia (GUID nuovo); 'Prestazioni elevate'
+        su molti portatili e PC con Modern Standby e' nascosto e va ricreato come copia: la cerco per nome."""
         code, out = run(["powercfg", "/list"])
+        found = None
         for line in out.splitlines():
-            if "ultimate" in line.lower() or "ottimal" in line.lower() or self.guid in line.lower():
-                m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}", line)
-                if m:
-                    return m.group(0).lower()
-        return None
+            m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}", line)
+            if not m:
+                continue
+            g = m.group(0).lower()
+            if g == self.guid:
+                return g
+            if found is None and any(n in line.lower() for n in self.names):
+                found = g
+        if found:
+            return found
+        return None if self.duplicate else (self.guid if code != 0 else None)
 
     def status(self):
         g = self._find()
@@ -260,10 +319,11 @@ class PowerPlanTweak(Tweak):
     def apply(self):
         prev = _active_scheme()
         g = self._find()
-        if g is None and self.duplicate:
+        if g is None or (not self.duplicate and run(["powercfg", "/setactive", g])[0] != 0):
+            # piano assente o nascosto: Windows lo ricrea come copia dal modello predefinito
             code, out = run(["powercfg", "-duplicatescheme", self.guid])
             m = re.search(r"[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}", out)
-            g = m.group(0) if m else None
+            g = m.group(0).lower() if m else None
         if not g or run(["powercfg", "/setactive", g])[0] != 0:
             raise RuntimeError("non riesco ad attivare il piano energetico")
         return {"prev": prev}
@@ -565,15 +625,18 @@ CATALOG = [
     # ------------------------------------------------------------ CPU / ENERGIA
     PowerPlanTweak("plan_high", "CPU ed energia", "Piano energetico 'Prestazioni elevate'",
                    "La CPU resta a frequenze alte. Sui Ryzen recenti il piano Bilanciato va gia' bene: "
-                   "differenza piccola.", "bassa", guid="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", group="plan"),
+                   "differenza piccola.", "bassa", guid="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", group="plan",
+                   names=("high performance", "prestazioni elevate")),
     PowerPlanTweak("plan_ultimate", "CPU ed energia", "Piano energetico 'Prestazioni ottimali' (Ultimate)",
                    "Come Prestazioni elevate ma senza alcun risparmio. Consuma di piu' anche a riposo.",
                    "bassa", risk=1, guid="e9a42b02-d5df-448d-aa00-03f14749eb61", duplicate=True, group="plan",
+                   names=("ultimate performance", "prestazioni ottimali"),
                    recommend=lambda s: None),
     PowerSettingTweak("core_parking", "CPU ed energia", "Disattiva core parking",
                       "Tiene sempre attivi tutti i core invece di 'parcheggiarli'. Utile soprattutto su "
                       "CPU Intel ibride vecchie e laptop.", "bassa",
-                      sub=SUB_PROC, setting="0cc5b647-c1df-4637-891a-dec35c318583", value=100),
+                      sub=SUB_PROC, setting="0cc5b647-c1df-4637-891a-dec35c318583", value=100,
+                      extra=("0cc5b647-c1df-4637-891a-dec35c318584",)),  # CPMINCORES1: P-core delle CPU ibride
     RegTweak("power_throttling", "CPU ed energia", "Disattiva Power Throttling",
              "Impedisce a Windows di rallentare i processi in background (es. Discord, OBS) per "
              "risparmiare energia.", "bassa",
@@ -931,6 +994,7 @@ FAMOUS = [
                       "La CPU non scende mai di frequenza. Piu' calore e consumi; sui Ryzen moderni il "
                       "guadagno e' minimo perche' la frequenza la gestisce la CPU stessa.", "bassa", risk=1,
                       sub=SUB_PROC, setting="893dee8e-2bef-41e0-89c6-b55d0929964c", value=100,
+                      extra=("893dee8e-2bef-41e0-89c6-b55d0929964d",),  # PROCTHROTTLEMIN1: P-core delle CPU ibride
                       recommend=lambda s: None),
     PowerSettingTweak("idle_off", "CPU ed energia", "Disattiva l'idle della CPU (C-states)",
                       "La CPU non va mai in riposo: latenza minima, usato nei setup competitivi estremi. "
@@ -1424,6 +1488,8 @@ def apply_one(tid):
     state[tid] = {"backup": backup, "data": datetime.datetime.now().isoformat(timespec="seconds"),
                   "nome": t.name}
     save_state(state)
+    if isinstance(t, PowerPlanTweak):
+        follow_power_settings()
     return "applicata" + (" (serve il riavvio)" if t.reboot else "")
 
 
@@ -1434,7 +1500,28 @@ def revert_one(tid):
     BY_ID[tid].revert(state[tid]["backup"])
     del state[tid]
     save_state(state)
+    if isinstance(BY_ID[tid], PowerPlanTweak):
+        follow_power_settings()
     return "annullata" + (" (serve il riavvio)" if BY_ID[tid].reboot else "")
+
+
+def follow_power_settings():
+    """Dopo un cambio di piano energetico: le impostazioni energetiche applicate da LagDoctor (core parking,
+    boost, USB...) vengono portate anche nel nuovo piano, altrimenti smetterebbero di funzionare."""
+    state = load_state()
+    changed = False
+    for tid, item in state.items():
+        t = BY_ID.get(tid)
+        if isinstance(t, PowerSettingTweak) and isinstance(item, dict) and "backup" in item:
+            b = item["backup"]
+            if "schemes" not in b:  # backup delle versioni precedenti: era il piano attivo di allora
+                continue
+            nb = t.follow(b)
+            if nb is not b:
+                item["backup"] = nb
+                changed = True
+    if changed:
+        save_state(state)
 
 
 def revert_all():

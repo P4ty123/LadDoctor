@@ -63,9 +63,12 @@ def detail(t):
         elif isinstance(t, T.ServiceTweak):
             out += _svc_detail(t)
         elif isinstance(t, T.PowerSettingTweak):
-            q = T._powercfg_query(t.sub, t.setting)
-            out.append("piano attivo: corrente %s / batteria %s (atteso %s)" % (q[0], q[1], t.value) if q else
-                       "impostazione energetica non leggibile")
+            cur = t._present()
+            if not cur:
+                out.append("impostazione energetica non leggibile")
+            for s, q in cur.items():
+                out.append("piano attivo%s: corrente %s / batteria %s (atteso %s)"
+                           % ("" if s == t.setting else " (P-core)", q[0], q[1], t.value))
         elif isinstance(t, T.PowerPlanTweak):
             out.append("piano energetico attivo: %s" % (T._active_scheme() or "non leggibile"))
         elif isinstance(t, T.BcdTweak):

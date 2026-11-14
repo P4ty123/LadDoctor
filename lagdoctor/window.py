@@ -35,12 +35,17 @@ def _log(text):
 
 
 class Api:
-    """Funzioni chiamate dalla barra del titolo dell'interfaccia (window.pywebview.api.*)."""
+    """Funzioni chiamate dalla barra del titolo dell'interfaccia (window.pywebview.api.*).
+
+    IMPORTANTE: tutti gli attributi devono iniziare con "_". pywebview, al caricamento della pagina, esplora ogni
+    attributo pubblico per trovare altre funzioni: con la finestra in un attributo pubblico (5.25.0 e 5.25.1)
+    leggeva anche posizione e dimensioni della finestra, ognuna con un'attesa fino a 15 secondi, bloccando la
+    finestra (caricamento infinito, "non risponde", chiusura)."""
 
     def __init__(self):
-        self.window = None
-        self.normal = None   # posizione e dimensioni prima di ingrandire
-        self.maxed = False
+        self._window = None
+        self._normal = None   # posizione e dimensioni prima di ingrandire
+        self._maxed = False
 
     def _guard(fn):
         """Un errore in un comando della barra non deve mai chiudere la finestra: lo scrivo nel registro."""
@@ -57,7 +62,7 @@ class Api:
     def _screen(self):
         """Area di lavoro (senza la barra delle applicazioni) dello schermo dove sta la finestra, in pixel logici."""
         import webview
-        w = self.window
+        w = self._window
         cx, cy = w.x + w.width // 2, w.y + w.height // 2
         scr = None
         for s in webview.screens:
@@ -73,44 +78,44 @@ class Api:
 
     @_guard
     def minimize(self):
-        self.window.minimize()
+        self._window.minimize()
 
     @_guard
     def toggle_maximize(self):
         """Ingrandisci = occupa l'area di lavoro dello schermo (non copre la barra delle applicazioni)."""
-        w = self.window
-        if self.maxed and self.normal:
-            x, y, wd, ht = self.normal
+        w = self._window
+        if self._maxed and self._normal:
+            x, y, wd, ht = self._normal
             w.resize(wd, ht)
             w.move(x, y)
-            self.maxed = False
+            self._maxed = False
         else:
-            self.normal = (w.x, w.y, w.width, w.height)
+            self._normal = (w.x, w.y, w.width, w.height)
             x, y, wd, ht = self._screen()
             w.move(x, y)
             w.resize(wd, ht)
-            self.maxed = True
-        return self.maxed
+            self._maxed = True
+        return self._maxed
 
     @_guard
     def is_maximized(self):
-        return self.maxed
+        return self._maxed
 
     @_guard
     def get_size(self):
-        return [self.window.width, self.window.height]
+        return [self._window.width, self._window.height]
 
     @_guard
     def resize_to(self, width, height, edge):
         """Ridimensiona dai bordi: i bordi sinistro e alto tengono fermo il lato opposto."""
         from webview.window import FixPoint
         fix = (FixPoint.SOUTH if "top" in edge else FixPoint.NORTH) | (FixPoint.EAST if "left" in edge else FixPoint.WEST)
-        self.maxed = False
-        self.window.resize(max(MIN_W, int(width)), max(MIN_H, int(height)), fix)
+        self._maxed = False
+        self._window.resize(max(MIN_W, int(width)), max(MIN_H, int(height)), fix)
 
     @_guard
     def close(self):
-        self.window.destroy()
+        self._window.destroy()
 
 
 def main(args):
@@ -146,7 +151,7 @@ def main(args):
                                     width=1280, height=860, min_size=(MIN_W, MIN_H), frameless=True, easy_drag=False,
                                     shadow=True, background_color="#07080D", js_api=api,
                                     minimized="--ridotto" in args)
-        api.window = win
+        api._window = win
         icon = os.path.join(paths.RES_DIR, "lagdoctor", "ui", "lagdoctor.ico")
         storage = os.path.join(paths.DATA_TOOLS, "finestra-webview2")
         os.makedirs(storage, exist_ok=True)

@@ -1,3 +1,11 @@
+## LagDoctor 5.25.2
+
+- Finestra nuova: trovata la causa del caricamento infinito, del "non risponde" e della chiusura (5.25.0 e
+  5.25.1). Al caricamento della pagina WebView2 esplorava anche la finestra stessa e aspettava fino a 15 secondi
+  per ognuna delle sue misure, bloccandosi. Ora non succede piu'.
+- Protezione in piu': se la finestra nuova non risponde per 20 secondi, LagDoctor la chiude e apre quella di Edge
+  come prima.
+
 ## LagDoctor 5.25.1
 
 - Finestra nuova (senza barra di Edge): nella 5.25.0 si chiudeva pochi secondi dopo averla cliccata. Ora usa solo

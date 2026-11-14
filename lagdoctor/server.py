@@ -1169,8 +1169,41 @@ def _open_webview(url, minimized=False):
         return False
     STATE["window"], STATE["window_t"] = proc, time.time()
 
+    def hung():
+        """La finestra c'e' ma Windows la considera bloccata ("non risponde")?"""
+        try:
+            import ctypes
+            u32 = ctypes.windll.user32
+            from ctypes import wintypes
+            for h in _lagdoctor_windows():
+                pid = wintypes.DWORD()
+                u32.GetWindowThreadProcessId(h, ctypes.byref(pid))
+                if pid.value == proc.pid and u32.IsHungAppWindow(h):
+                    return True
+        except Exception:
+            pass
+        return False
+
     def watch():
-        code = proc.wait()
+        stuck_since = None
+        while True:
+            try:
+                code = proc.wait(timeout=2)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            if hung():
+                stuck_since = stuck_since or time.time()
+                if time.time() - stuck_since > 20:  # bloccata da 20 secondi: la chiudo e passo a Edge
+                    log_error_text("Finestra WebView2 bloccata (non risponde) da 20 secondi: la chiudo")
+                    try:
+                        proc.kill()
+                    except OSError:
+                        pass
+                    code = -1
+                    break
+            else:
+                stuck_since = None
         if code == 0:  # chiusa da te (X): come prima, LagDoctor resta vicino all'orologio
             _window_closed(proc)
             return

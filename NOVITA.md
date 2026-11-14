@@ -1,3 +1,13 @@
+## LagDoctor 5.25.4
+
+- La finestra torna quella di Edge (stabile). La finestra senza barra di Edge diventa sperimentale: si accende da
+  Impostazioni > "Finestra senza barra di Edge (sperimentale)" e vale dalla prossima apertura.
+- Con la finestra sperimentale accesa: se va in errore, alla prossima apertura LagDoctor riprova con la grafica
+  in modalita' software; se va in errore anche cosi', torna da solo alla finestra di Edge (riaccendendo
+  l'interruttore si riprova da capo).
+- Registro piu' completo per capire il problema: ogni fase dell'apertura e gli errori di .NET in
+  errore-finestra.txt, i messaggi di .NET e di WebView2 in finestra-console.txt (cartella dei dati).
+
 ## LagDoctor 5.25.3
 
 - Finestra nuova: dopo pochi secondi poteva diventare tutta nera.

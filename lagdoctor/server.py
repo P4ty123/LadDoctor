@@ -652,7 +652,9 @@ class Handler(BaseHTTPRequestHandler):
                                    "running": t.running() if hasattr(t, "running") else []}
             return {"live": overlays.live(), "items": items}
         if path == "/api/settings":
-            return settings.status()
+            d = settings.status()
+            d["new_window_failed"] = _webview_failures() > 0
+            return d
         if path == "/api/update":
             return updater.check(force=qs.get("force", ["0"])[0] == "1")
         if path == "/api/gamemode":
@@ -764,7 +766,9 @@ class Handler(BaseHTTPRequestHandler):
             for k in settings.DEFAULTS:
                 if k in b:
                     d[k] = bool(b[k])
-            if set(b) <= {"animations"}:  # solo l'aspetto: niente da cambiare nell'avvio con Windows
+            if set(b) <= {"animations", "new_window"}:  # niente da cambiare nell'avvio con Windows
+                if b.get("new_window"):
+                    reset_webview_failures()
                 settings.save(d)
             else:
                 settings.apply(d)
@@ -1119,19 +1123,39 @@ def quit_all():
 WEBVIEW_FAIL = None  # file che ricorda se la finestra WebView2 ha dato errori con questa versione
 
 
-def _webview_failed_before():
+WEBVIEW_TRIES = 2  # 1: normale, 2: grafica software. Poi finestra di Edge (per questa versione)
+
+
+def _webview_failures():
+    """Quante volte la finestra nuova e' andata in errore con questa versione."""
     try:
         with open(paths.data("finestra.json"), encoding="utf-8") as f:
-            return json.load(f).get("errore_versione") == __version__
+            d = json.load(f)
+        return int(d.get("errori", 1)) if d.get("errore_versione") == __version__ else 0
     except (OSError, ValueError):
-        return False
+        return 0
+
+
+def _webview_failed_before():
+    return _webview_failures() >= WEBVIEW_TRIES
 
 
 def _remember_webview_failure():
     STATE["webview_failed"] = True
+    n = _webview_failures() + 1  # prima di aprire il file in scrittura (lo svuota)
     try:
         with open(paths.data("finestra.json"), "w", encoding="utf-8") as f:
-            json.dump({"errore_versione": __version__, "quando": time.strftime("%Y-%m-%d %H:%M:%S")}, f)
+            json.dump({"errore_versione": __version__, "errori": n,
+                       "quando": time.strftime("%Y-%m-%d %H:%M:%S")}, f)
+    except OSError:
+        pass
+
+
+def reset_webview_failures():
+    """Interruttore riacceso in Impostazioni: si riprova da capo."""
+    STATE.pop("webview_failed", None)
+    try:
+        os.remove(paths.data("finestra.json"))
     except OSError:
         pass
 
@@ -1140,6 +1164,8 @@ def _webview_available():
     """La finestra senza barra di Edge si puo' usare? (versione installata, o da sorgente con pywebview)
     No se ha gia' dato errori con questa versione: in quel caso si usa la finestra di Edge, come prima."""
     if os.name != "nt" or STATE.get("webview_failed") or _webview_failed_before():
+        return False
+    if not settings.load().get("new_window"):  # sperimentale: solo se accesa in Impostazioni
         return False
     if paths.FROZEN:
         return True
@@ -1161,9 +1187,17 @@ def _window_closed(proc):
 
 def _open_webview(url, minimized=False):
     """Apre la finestra WebView2. Se entro 10 secondi si chiude con un errore, apre quella di Edge."""
-    cmd = paths.gui_cmd("--finestra", url, *(["--ridotto"] if minimized else []))
+    soft = _webview_failures() >= 1  # e' gia' andata in errore una volta: provo con la grafica in software
+    cmd = paths.gui_cmd("--finestra", url, *(["--ridotto"] if minimized else []), *(["--senza-gpu"] if soft else []))
     try:
-        proc = subprocess.Popen(cmd)
+        out = open(paths.data("finestra-console.txt"), "a", encoding="utf-8", errors="replace")
+        out.write("\n===== %s avvio finestra%s =====\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), " (grafica software)" if soft else ""))
+        out.flush()
+    except OSError:
+        out = subprocess.DEVNULL
+    try:
+        # messaggi di .NET e di WebView2 (scritti sulla console) finiscono in finestra-console.txt
+        proc = subprocess.Popen(cmd, stdout=out, stderr=out)
     except OSError:
         STATE["webview_failed"] = True
         return False
@@ -1239,7 +1273,10 @@ def _open_webview(url, minimized=False):
             return
         # non e' partita o si e' chiusa con un errore (in qualsiasi momento): subito la finestra di Edge, come prima,
         # e per questa versione non riprovo. Il motivo e' in errore-finestra.txt
-        log_error_text("Finestra WebView2 chiusa con codice %s: uso la finestra di Edge" % code)
+        log_error_text("Finestra WebView2 chiusa con codice %s (0x%08X)%s" % (
+            code, code & 0xFFFFFFFF if isinstance(code, int) else 0,
+            ": la prossima volta riprovo con la grafica in software" if _webview_failures() + 1 < WEBVIEW_TRIES
+            else ": d'ora in poi uso la finestra di Edge con questa versione"))
         _remember_webview_failure()
         _open_edge(url, minimized and time.time() - STATE["window_t"] < 10)
     threading.Thread(target=watch, daemon=True).start()

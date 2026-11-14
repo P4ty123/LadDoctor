@@ -1424,6 +1424,7 @@ async function settingsDialog() {
   const m = modal(`<h2>Impostazioni</h2>
     ${row("set-auto", "Avvia LagDoctor con Windows", "LagDoctor si apre da solo circa 15 secondi dopo l'accesso a Windows, gia' con i permessi di amministratore (nessuna richiesta di conferma). L'hardware non viene riletto: le impostazioni si controllano in background.", s.autostart)}
     ${row("set-min", "Ridotto a icona", "All'avvio con Windows LagDoctor parte solo come icona vicino all'orologio, senza aprire la finestra: clicca l'icona quando ti serve.", s.minimized, !s.autostart)}
+    ${row("set-newwin", "Finestra senza barra di Edge (sperimentale)", "Usa la finestra nuova, con la barra del titolo di LagDoctor al posto di quella grigia di Edge. Se va in errore LagDoctor riprova una volta con la grafica in modalita' software, poi torna da solo alla finestra di Edge. Vale dalla prossima apertura: <b>Esci</b> e riapri LagDoctor." + (s.new_window && s.new_window_failed ? " <b>Ultimo tentativo andato in errore</b>: dettagli in errore-finestra.txt (cartella dei dati)." : ""), s.new_window === true)}
     ${row("set-anim", "Animazioni", "Quando cambi scheda la pagina vecchia scompare e la nuova entra con un'animazione. Spegnile per cambi di scheda istantanei.", s.animations !== false)}
     <p class="mut" style="font-size:12.5px">Chiudendo la finestra con la X, LagDoctor resta acceso tra le icone vicino all'orologio (in basso a destra). Per chiuderlo davvero: tasto destro sull'icona &gt; <b>Esci</b>, oppure il pulsante Esci qui a sinistra.</p>
     ${s.autostart && !s.task ? '<p style="color:#e8a23a;font-size:13px">L\'avvio con Windows non risulta attivo: riattivalo.</p>' : ""}
@@ -1440,6 +1441,11 @@ async function settingsDialog() {
   $("#set-verify", m).onclick = () => { closeModal(); go("verifica"); };
   $("#set-auto", m).onchange = save;
   $("#set-min", m).onchange = save;
+  $("#set-newwin", m).onchange = async (e) => {
+    const on = e.target.checked;
+    try { await api("/api/settings", { new_window: on }); toast(on ? "Finestra nuova accesa: esci e riapri LagDoctor per usarla" : "Finestra nuova spenta: dalla prossima apertura torna quella di Edge", 6000); }
+    catch (err) { e.target.checked = !on; toast("Errore: " + err.message); }
+  };
   $("#set-anim", m).onchange = async (e) => {
     const on = e.target.checked;
     try { await api("/api/settings", { animations: on }); S.noAnim = !on; toast(on ? "Animazioni attivate" : "Animazioni disattivate"); }

@@ -139,7 +139,7 @@ class Watch:
             def f():
                 core.ProcessFailed += self._failed
             form.Invoke(Action(f)) if form.InvokeRequired else f()
-            _log("finestra aperta (WebView2 %s)" % getattr(core.Environment, "BrowserVersionString", "?"))
+            _log("fase: pagina caricata, finestra aperta (WebView2 %s)" % getattr(core.Environment, "BrowserVersionString", "?"))
         except Exception:
             import traceback
             _log("controllo di WebView2 non attivo:\n" + traceback.format_exc())
@@ -160,10 +160,30 @@ class Watch:
             os._exit(FAILED)
 
 
+def _dotnet_handlers():
+    """Errori di .NET (WinForms, WebView2): scritti nel registro. Quelli del thread della finestra non la chiudono."""
+    try:
+        import clr
+        clr.AddReference("System.Windows.Forms")
+        from System import AppDomain
+        from System.Windows.Forms import Application, UnhandledExceptionMode
+        AppDomain.CurrentDomain.UnhandledException += lambda s, e: _log("errore .NET (chiude la finestra):\n%s" % e.ExceptionObject)
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException)
+        Application.ThreadException += lambda s, e: _log("errore .NET nella finestra (ignorato):\n%s" % e.Exception)
+        _log("fase: gestione errori .NET attiva")
+    except Exception:
+        import traceback
+        _log("gestione errori .NET non attiva:\n" + traceback.format_exc())
+
+
 def main(args):
     url = next((a for a in args if a.startswith("http")), None)
     if not url:
         return FAILED
+    soft = "--senza-gpu" in args
+    if soft:  # secondo tentativo: grafica in software (molti crash di WebView2 vengono dal driver video)
+        os.environ["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--disable-gpu --disable-gpu-compositing"
+    _log("fase: avvio della finestra nuova (%s), processo %d" % ("grafica software" if soft else "normale", os.getpid()))
     log = None
     try:
         import faulthandler
@@ -183,10 +203,12 @@ def main(args):
         h = logging.FileHandler(_log_path(), encoding="utf-8")
         h.setLevel(logging.WARNING)
         logging.getLogger("pywebview").addHandler(h)
+        _log("fase: pywebview %s caricato" % getattr(webview, "__version__", "?"))
     except Exception:
         import traceback
         _log("pywebview non disponibile:\n" + traceback.format_exc())
         return FAILED
+    _dotnet_handlers()
     api = Api()
     try:
         win = webview.create_window("LagDoctor", url + ("&" if "?" in url else "?") + "frameless=1",
@@ -197,6 +219,9 @@ def main(args):
         watch = Watch()
         watch._window = win
         win.events.loaded += watch.attach
+        win.events.shown += lambda: _log("fase: finestra mostrata")
+        win.events.closed += lambda: _log("fase: finestra chiusa")
+        _log("fase: avvio di WebView2")
         icon = os.path.join(paths.RES_DIR, "lagdoctor", "ui", "lagdoctor.ico")
         storage = os.path.join(paths.DATA_TOOLS, "finestra-webview2")
         os.makedirs(storage, exist_ok=True)

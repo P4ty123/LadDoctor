@@ -1,4 +1,4 @@
-## LagDoctor 5.21.2
+## LagDoctor 5.25.6
 
 - Game mode con "Chiudi Esplora risorse": a fine partita Esplora risorse viene riaperto PER PRIMO (prima veniva
   riaperto dopo aver fatto ripartire servizi e attivita', e lo schermo restava grigio a lungo). Il resto viene

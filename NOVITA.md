@@ -1,3 +1,10 @@
+## LagDoctor 5.25.10
+
+- Game mode e Minecraft Java: la game mode si attivava gia' aprendo TLauncher (o altri launcher Java), che veniva
+  scambiato per il gioco e riceveva la priorita' alta mentre giocavi. Ora conta solo il processo del gioco vero
+  (riconosciuto dagli argomenti --gameDir/--assetsDir o dalla classe del gioco: vanilla, Fabric, Forge, Quilt,
+  NeoForge, Lunar, Badlion). Il launcher resta un programma in background.
+
 ## LagDoctor 5.25.9
 
 - Finestra dopo Applica: titolo al singolare quando serve ("1 NON riuscita").

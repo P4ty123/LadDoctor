@@ -259,6 +259,25 @@ def manual(exe_path):
 
 
 # ---------------------------------------------------------------- riconoscimento dei processi
+# Minecraft Java: conta solo il processo del GIOCO, non quello del launcher (TLauncher, Legacy Launcher... sono
+# anche loro Java e stanno nella cartella .minecraft). Il gioco si riconosce dagli argomenti che ogni launcher gli
+# passa (--gameDir, --assetsDir, --accessToken) o dalla sua classe principale (vanilla, Fabric, Forge, Quilt...).
+MC_CLIENT = ("--gamedir", "--assetsdir", "--accesstoken", "net.minecraft.client.main", "knotclient",
+             "bootstraplauncher", "cpw.mods.modlauncher", "net.minecraftforge", "neoforge", "com.moonsworth",
+             "lunarclient", "badlion")
+MC_LAUNCHER = ("tlauncher.exe", "tlauncher.jar", "org.tlauncher", "legacylauncher", "legacy-launcher",
+               "minecraft-launcher", "sklauncher", "atlauncher", "technic", "launcher.jar")
+
+
+def is_minecraft_client(cmd):
+    cmd = (cmd or "").lower()
+    if not any(k in cmd for k in MC_CLIENT):
+        return False
+    # un launcher puo' avere --gamedir solo se e' lui il gioco: se manca la classe del gioco e c'e' il launcher, no
+    return not (any(k in cmd for k in MC_LAUNCHER) and "--accesstoken" not in cmd and "net.minecraft" not in cmd
+                and "knotclient" not in cmd and "modlauncher" not in cmd)
+
+
 def matches(game, name, exe, cmdline_fn):
     """name/exe del processo; cmdline_fn() restituisce la riga di comando (chiamata solo se serve)."""
     name = (name or "").lower()
@@ -274,6 +293,8 @@ def matches(game, name, exe, cmdline_fn):
         if name not in ("java.exe", "javaw.exe"):
             return False
         cmd = (cmdline_fn() or "").lower()
+        if game.get("id") == "minecraft:java":
+            return is_minecraft_client(cmd)
         return any(k in cmd for k in game.get("keywords") or [])
     return False
 

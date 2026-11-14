@@ -1,3 +1,14 @@
+## LagDoctor 5.25.5
+
+- Finestra senza barra di Edge: trovata e corretta la causa del blocco ("non risponde" pochi secondi dopo
+  l'apertura). Un controllo di LagDoctor leggeva WebView2 dal thread sbagliato e la finestra e LagDoctor si
+  aspettavano a vicenda. Il blocco e' stato riprodotto e la correzione provata su un PC Windows vero: apertura,
+  nessun blocco, nessuna schermata nera, trascinamento, ridimensionamento da tutti i bordi e dall'angolo,
+  ingrandisci / ripristina (tasto e doppio clic sulla barra).
+- La finestra nuova torna accesa di base (si puo' spegnere in Impostazioni). Se su un PC desse ancora problemi,
+  LagDoctor riprova con la grafica software e poi torna da solo alla finestra di Edge.
+- Se la finestra si blocca, il registro (errore-finestra.txt) ora indica il punto esatto del blocco.
+
 ## LagDoctor 5.25.4
 
 - La finestra torna quella di Edge (stabile). La finestra senza barra di Edge diventa sperimentale: si accende da

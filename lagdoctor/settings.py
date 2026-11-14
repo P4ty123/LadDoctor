@@ -7,7 +7,7 @@ from . import paths
 
 FILE = paths.data("impostazioni.json")
 TASK = "LagDoctor Avvio"
-DEFAULTS = {"autostart": False, "minimized": True, "animations": True, "new_window": False}
+DEFAULTS = {"autostart": False, "minimized": True, "animations": True, "new_window": True}
 CREATE_NO_WINDOW = 0x08000000
 
 

@@ -3,33 +3,35 @@
     LagDoctor.exe --finestra <indirizzo> [--ridotto]
 
 E' un processo a parte, avviato dal programma come prima si avviava Edge: il resto di LagDoctor (server, icona
-vicino all'orologio, avvio con Windows) non cambia. Se la finestra non si puo' creare (WebView2 o .NET mancanti)
-esce con il codice 3 e LagDoctor apre la finestra di Edge come prima.
+vicino all'orologio, avvio con Windows) non cambia. Se la finestra non parte o si chiude con un errore, LagDoctor
+apre subito la finestra di Edge come prima (server.py) e per questa versione non riprova.
 
-La barra del titolo la disegna l'interfaccia (ui/index.html, body.frameless). Trascinare la barra e i bordi passa
-il comando a Windows (WM_NCLBUTTONDOWN, come le altre app con WebView2 e barra propria): cosi' funzionano Snap
-(trascina in alto o ai lati), il ridimensionamento normale e Win+frecce.
+La barra del titolo la disegna l'interfaccia (ui/index.html, body.frameless). Solo funzioni ufficiali di
+pywebview: trascinamento (classe pywebview-drag-region), move, resize, minimize, destroy. Niente chiamate dirette a
+Windows sulla finestra (la 5.25.0 le usava e la finestra si chiudeva appena cliccata).
+Errori e chiusure improvvise vengono scritti in errore-finestra.txt (cartella dei dati di LagDoctor).
 """
-import ctypes
 import os
 import sys
+import threading
+import time
 
 FAILED = 3
-
-WM_NCLBUTTONDOWN = 0x00A1
-HIT = {"caption": 2, "left": 10, "right": 11, "top": 12, "topleft": 13, "topright": 14,
-       "bottom": 15, "bottomleft": 16, "bottomright": 17}
-GWL_STYLE = -16
-WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_SYSMENU = 0x00020000, 0x00010000, 0x00080000
-DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND = 33, 2
+MIN_W, MIN_H = 900, 600
 
 
-def _user32():
-    u = ctypes.windll.user32
-    u.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
-    u.GetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int]
-    u.SetWindowLongW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long]
-    return u
+def _log_path():
+    from . import paths
+    os.makedirs(paths.DATA_DIR, exist_ok=True)
+    return paths.data("errore-finestra.txt")
+
+
+def _log(text):
+    try:
+        with open(_log_path(), "a", encoding="utf-8") as f:
+            f.write("[%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+    except Exception:
+        pass
 
 
 class Api:
@@ -37,129 +39,122 @@ class Api:
 
     def __init__(self):
         self.window = None
+        self.normal = None   # posizione e dimensioni prima di ingrandire
+        self.maxed = False
 
-    # ------------------------------------------------------------ utilita'
-    def _form(self):
-        return self.window.native
-
-    def _hwnd(self):
-        return ctypes.c_void_p(self._form().Handle.ToInt64())
-
-    def _ui(self, fn):
-        """Esegue fn sul thread della finestra (le chiamate dall'interfaccia arrivano da un altro thread)."""
-        from System import Action
-        form = self._form()
-        if form.InvokeRequired:
-            form.Invoke(Action(fn))
-        else:
-            fn()
-
-    def _fit_maximized(self):
-        """Ingrandita senza bordo, WinForms coprirebbe la barra delle applicazioni: limito all'area di lavoro dello
-        schermo in cui si trova la finestra (coordinate relative a quello schermo)."""
-        from System.Drawing import Rectangle
-        from System.Windows.Forms import Screen
-        form = self._form()
-        scr = Screen.FromHandle(form.Handle)
-        wa, b = scr.WorkingArea, scr.Bounds
-        form.MaximizedBounds = Rectangle(wa.X - b.X, wa.Y - b.Y, wa.Width, wa.Height)
-
-    def setup(self):
-        """Appena la finestra compare: angoli arrotondati (Windows 11), riduci/ingrandisci dalla barra delle
-        applicazioni e dalla tastiera, area di lavoro quando e' ingrandita."""
-        def f():
-            u = _user32()
-            h = self._hwnd()
-            u.SetWindowLongW(h, GWL_STYLE, u.GetWindowLongW(h, GWL_STYLE) | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)
+    def _guard(fn):
+        """Un errore in un comando della barra non deve mai chiudere la finestra: lo scrivo nel registro."""
+        def wrap(self, *a):
             try:
-                pref = ctypes.c_int(DWMWCP_ROUND)
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(h, DWMWA_WINDOW_CORNER_PREFERENCE, ctypes.byref(pref), 4)
+                return fn(self, *a)
             except Exception:
-                pass  # Windows 10: angoli dritti
-            self._fit_maximized()
-            form = self._form()
-            form.Move += lambda s, e: self._fit_maximized()  # spostata su un altro schermo
+                import traceback
+                _log("errore in %s:\n%s" % (fn.__name__, traceback.format_exc()))
+                return None
+        wrap.__name__ = fn.__name__
+        return wrap
+
+    def _screen(self):
+        """Area di lavoro (senza la barra delle applicazioni) dello schermo dove sta la finestra, in pixel logici."""
+        import webview
+        w = self.window
+        cx, cy = w.x + w.width // 2, w.y + w.height // 2
+        scr = None
+        for s in webview.screens:
+            if s.x <= cx < s.x + s.width and s.y <= cy < s.y + s.height:
+                scr = s
+                break
+        scr = scr or webview.screens[0]
+        fr = scr.frame  # WorkingArea di Windows
         try:
-            self._ui(f)
+            return int(fr.X), int(fr.Y), int(fr.Width), int(fr.Height)
         except Exception:
-            pass
+            return scr.x, scr.y, scr.width, scr.height
 
-    def _nc(self, what):
-        def f():
-            u = _user32()
-            u.ReleaseCapture()
-            u.PostMessageW(self._hwnd(), WM_NCLBUTTONDOWN, HIT[what], 0)
-        self._ui(f)
-
-    # ------------------------------------------------------------ chiamate dall'interfaccia
+    @_guard
     def minimize(self):
         self.window.minimize()
 
+    @_guard
     def toggle_maximize(self):
-        def f():
-            from System.Windows.Forms import FormWindowState
-            form = self._form()
-            if form.WindowState == FormWindowState.Maximized:
-                form.WindowState = FormWindowState.Normal
-            else:
-                self._fit_maximized()
-                form.WindowState = FormWindowState.Maximized
-        self._ui(f)
+        """Ingrandisci = occupa l'area di lavoro dello schermo (non copre la barra delle applicazioni)."""
+        w = self.window
+        if self.maxed and self.normal:
+            x, y, wd, ht = self.normal
+            w.resize(wd, ht)
+            w.move(x, y)
+            self.maxed = False
+        else:
+            self.normal = (w.x, w.y, w.width, w.height)
+            x, y, wd, ht = self._screen()
+            w.move(x, y)
+            w.resize(wd, ht)
+            self.maxed = True
+        return self.maxed
 
+    @_guard
     def is_maximized(self):
-        out = []
+        return self.maxed
 
-        def f():
-            from System.Windows.Forms import FormWindowState
-            out.append(self._form().WindowState == FormWindowState.Maximized)
-        try:
-            self._ui(f)
-        except Exception:
-            return False
-        return bool(out and out[0])
+    @_guard
+    def get_size(self):
+        return [self.window.width, self.window.height]
 
+    @_guard
+    def resize_to(self, width, height, edge):
+        """Ridimensiona dai bordi: i bordi sinistro e alto tengono fermo il lato opposto."""
+        from webview.window import FixPoint
+        fix = (FixPoint.SOUTH if "top" in edge else FixPoint.NORTH) | (FixPoint.EAST if "left" in edge else FixPoint.WEST)
+        self.maxed = False
+        self.window.resize(max(MIN_W, int(width)), max(MIN_H, int(height)), fix)
+
+    @_guard
     def close(self):
         self.window.destroy()
-
-    def start_drag(self):
-        self._nc("caption")
-
-    def start_resize(self, edge):
-        if edge in HIT and edge != "caption":
-            self._nc(edge)
 
 
 def main(args):
     url = next((a for a in args if a.startswith("http")), None)
     if not url:
         return FAILED
+    log = None
     try:
+        import faulthandler
+        log = open(_log_path(), "a", encoding="utf-8")
+        faulthandler.enable(log)  # chiusure improvvise (anche dentro WebView2/.NET) finiscono nel registro
+    except Exception:
+        pass
+
+    def thread_error(a):
+        import traceback
+        _log("errore in un thread:\n" + "".join(traceback.format_exception(a.exc_type, a.exc_value, a.exc_traceback)))
+    threading.excepthook = thread_error
+    try:
+        import logging
         import webview
         from . import paths
+        h = logging.FileHandler(_log_path(), encoding="utf-8")
+        h.setLevel(logging.WARNING)
+        logging.getLogger("pywebview").addHandler(h)
     except Exception:
+        import traceback
+        _log("pywebview non disponibile:\n" + traceback.format_exc())
         return FAILED
     api = Api()
     try:
         win = webview.create_window("LagDoctor", url + ("&" if "?" in url else "?") + "frameless=1",
-                                    width=1280, height=860, min_size=(900, 600), frameless=True, easy_drag=False,
+                                    width=1280, height=860, min_size=(MIN_W, MIN_H), frameless=True, easy_drag=False,
                                     shadow=True, background_color="#07080D", js_api=api,
                                     minimized="--ridotto" in args)
         api.window = win
-        win.events.shown += api.setup
         icon = os.path.join(paths.RES_DIR, "lagdoctor", "ui", "lagdoctor.ico")
         storage = os.path.join(paths.DATA_TOOLS, "finestra-webview2")
         os.makedirs(storage, exist_ok=True)
         webview.start(gui="edgechromium", private_mode=False, storage_path=storage,
                       icon=icon if os.path.isfile(icon) else None)
     except Exception:
-        try:
-            import traceback
-            from . import paths
-            os.makedirs(paths.DATA_DIR, exist_ok=True)
-            with open(paths.data("errore-finestra.txt"), "w", encoding="utf-8") as f:
-                traceback.print_exc(file=f)
-        except Exception:
-            pass
+        import traceback
+        _log("la finestra non si e' aperta:\n" + traceback.format_exc())
         return FAILED
     return 0
 

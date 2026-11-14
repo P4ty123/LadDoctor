@@ -41,6 +41,15 @@ def log_error():
         pass
 
 
+def log_error_text(text):
+    """Una riga nel registro della finestra (errore-finestra.txt), accanto agli errori della finestra stessa."""
+    try:
+        with open(paths.data("errore-finestra.txt"), "a", encoding="utf-8") as f:
+            f.write("[%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), text))
+    except Exception:
+        pass
+
+
 # ======================================================================= lavori in background
 
 class Job:
@@ -805,6 +814,7 @@ class Handler(BaseHTTPRequestHandler):
             threading.Thread(target=show_window, daemon=True).start()
             return 200, {"ok": True}
         elif path == "/api/quit":
+            STATE["quitting"] = True
             threading.Thread(target=lambda: (time.sleep(0.8), _close_windows(2.0), _shutdown()), daemon=True).start()
             return 200, {"ok": True}
         else:
@@ -1101,13 +1111,35 @@ def show_window():
 
 def quit_all():
     """Esci dal menu dell'icona: chiude la finestra e il programma."""
+    STATE["quitting"] = True
     _close_windows(2.0)
     _shutdown()
 
 
+WEBVIEW_FAIL = None  # file che ricorda se la finestra WebView2 ha dato errori con questa versione
+
+
+def _webview_failed_before():
+    try:
+        with open(paths.data("finestra.json"), encoding="utf-8") as f:
+            return json.load(f).get("errore_versione") == __version__
+    except (OSError, ValueError):
+        return False
+
+
+def _remember_webview_failure():
+    STATE["webview_failed"] = True
+    try:
+        with open(paths.data("finestra.json"), "w", encoding="utf-8") as f:
+            json.dump({"errore_versione": __version__, "quando": time.strftime("%Y-%m-%d %H:%M:%S")}, f)
+    except OSError:
+        pass
+
+
 def _webview_available():
-    """La finestra senza barra di Edge si puo' usare? (versione installata, o da sorgente con pywebview)"""
-    if os.name != "nt" or STATE.get("webview_failed"):
+    """La finestra senza barra di Edge si puo' usare? (versione installata, o da sorgente con pywebview)
+    No se ha gia' dato errori con questa versione: in quel caso si usa la finestra di Edge, come prima."""
+    if os.name != "nt" or STATE.get("webview_failed") or _webview_failed_before():
         return False
     if paths.FROZEN:
         return True
@@ -1138,18 +1170,17 @@ def _open_webview(url, minimized=False):
     STATE["window"], STATE["window_t"] = proc, time.time()
 
     def watch():
-        try:
-            code = proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            code = proc.wait()  # funziona: aspetto che venga chiusa
-            if code == 0:
-                _window_closed(proc)
-            return
-        if code != 0:  # non e' partita (es. WebView2 mancante): finestra di Edge, come prima
-            STATE["webview_failed"] = True
-            _open_edge(url, minimized)
-        else:
+        code = proc.wait()
+        if code == 0:  # chiusa da te (X): come prima, LagDoctor resta vicino all'orologio
             _window_closed(proc)
+            return
+        if STATE.get("quitting"):
+            return
+        # non e' partita o si e' chiusa con un errore (in qualsiasi momento): subito la finestra di Edge, come prima,
+        # e per questa versione non riprovo. Il motivo e' in errore-finestra.txt
+        log_error_text("Finestra WebView2 chiusa con codice %s: uso la finestra di Edge" % code)
+        _remember_webview_failure()
+        _open_edge(url, minimized and time.time() - STATE["window_t"] < 10)
     threading.Thread(target=watch, daemon=True).start()
     return True
 

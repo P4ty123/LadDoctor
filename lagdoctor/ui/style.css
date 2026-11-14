@@ -466,3 +466,4 @@ body.frameless .rz{display:block}
 .rz [data-e=bottomleft]{left:0;bottom:0;width:10px;height:10px;cursor:sw-resize}
 .rz [data-e=bottomright]{right:0;bottom:0;width:10px;height:10px;cursor:se-resize}
 body.frameless.maxed .rz{display:none}
+body.resizing,body.resizing *{user-select:none!important}

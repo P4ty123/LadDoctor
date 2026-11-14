@@ -65,17 +65,36 @@ const FRAMELESS = !!window.pywebview || /[?&]frameless=1/.test(location.search);
 if (FRAMELESS) document.body.classList.add("frameless");
 const winApi = (a, ...args) => (window.pywebview && window.pywebview.api && window.pywebview.api[a] ? window.pywebview.api[a](...args) : Promise.resolve());
 $("#tb-min").onclick = () => winApi("minimize");
-$("#tb-max").onclick = () => winApi("toggle_maximize");
+$("#tb-max").onclick = () => winApi("toggle_maximize").then(() => setTimeout(syncMax, 80));
 $("#tb-close").onclick = () => winApi("close");
-/* trascinare: la barra in alto e il logo. Doppio clic = ingrandisci / ripristina */
-[$("#tb-drag"), $(".brand")].forEach((el) => el.addEventListener("mousedown", (e) => {
-  if (!FRAMELESS || e.button !== 0) return;
+/* trascinare: la barra in alto e il logo (classe pywebview-drag-region, lo fa pywebview). Doppio clic = ingrandisci */
+[$("#tb-drag"), $(".brand")].forEach((el) => el.addEventListener("dblclick", () => { if (FRAMELESS) winApi("toggle_maximize"); }));
+/* ridimensionare dai bordi: la finestra segue il mouse (un comando alla volta, per non intasarla) */
+$$("#rz i").forEach((el) => el.addEventListener("mousedown", async (e) => {
+  if (e.button !== 0 || !FRAMELESS) return;
   e.preventDefault();
-  if (e.detail === 2) winApi("toggle_maximize"); else winApi("start_drag");
+  const edge = el.dataset.e, sx = e.screenX, sy = e.screenY;
+  const size = await winApi("get_size");
+  if (!size) return;
+  let busy = false, last = null;
+  const send = async () => {
+    if (busy || !last) return;
+    busy = true; const [w, h] = last; last = null;
+    await winApi("resize_to", w, h, edge).catch(() => {});
+    busy = false; send();
+  };
+  const move = (ev) => {
+    const dx = ev.screenX - sx, dy = ev.screenY - sy;
+    const w = size[0] + (edge.includes("left") ? -dx : edge.includes("right") ? dx : 0);
+    const h = size[1] + (edge.includes("top") ? -dy : edge.includes("bottom") ? dy : 0);
+    last = [w, h]; send();
+  };
+  const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); document.body.classList.remove("resizing"); };
+  document.body.classList.add("resizing");
+  window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
 }));
-$$("#rz i").forEach((el) => el.addEventListener("mousedown", (e) => { if (e.button === 0) { e.preventDefault(); winApi("start_resize", el.dataset.e); } }));
 /* finestra ingrandita: niente bordi per ridimensionare */
-const syncMax = () => winApi("is_maximized").then((m) => document.body.classList.toggle("maxed", m === true)).catch(() => {});
+const syncMax = () => winApi("is_maximized").then((m) => { document.body.classList.toggle("maxed", m === true); $("#tb-max").title = m ? "Ripristina" : "Ingrandisci"; }).catch(() => {});
 if (FRAMELESS) { window.addEventListener("resize", () => setTimeout(syncMax, 60)); window.addEventListener("pywebviewready", syncMax); }
 /* animazioni: decide solo l'interruttore in Impostazioni (S.noAnim). Non seguono "Effetti di animazione" di
    Windows: molti lo spengono per le prestazioni (anche le ottimizzazioni degli effetti visivi) e le animazioni

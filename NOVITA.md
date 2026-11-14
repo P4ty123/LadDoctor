@@ -1,3 +1,12 @@
+## LagDoctor 5.25.1
+
+- Finestra nuova (senza barra di Edge): nella 5.25.0 si chiudeva pochi secondi dopo averla cliccata. Ora usa solo
+  le funzioni ufficiali di WebView2/pywebview per trascinare, ingrandire e ridimensionare (non piu' comandi diretti
+  di Windows sulla finestra).
+- Se la finestra nuova si chiude con un errore, in qualsiasi momento, LagDoctor apre subito la finestra di Edge
+  come prima e con questa versione non riprova. Il motivo viene scritto in errore-finestra.txt nella cartella dei
+  dati di LagDoctor.
+
 ## LagDoctor 5.25.0
 
 - Finestra nuova, senza la barra grigia di Edge in alto: la barra del titolo e' quella di LagDoctor, nello stesso

@@ -47,6 +47,41 @@ def get(sid):
     return next((s for s in _load(FILE, []) if s["id"] == sid), None)
 
 
+def _files(s):
+    """File di una sessione nella cartella dei report: report .html, frame .csv e dati di sistema .json."""
+    folder = os.path.dirname(FILE)
+    name = os.path.basename(s.get("report") or "")
+    if not (name.startswith("report-") and name.endswith(".html")):
+        return []
+    stem = name[len("report-"):-len(".html")]
+    root = os.path.realpath(folder)
+    out = []
+    for n in (name, "frame-%s.csv" % stem, "frame-%s-sistema.json" % stem):
+        p = os.path.join(folder, n)
+        if os.path.realpath(p).startswith(root + os.sep) and os.path.isfile(p):
+            out.append(p)
+    return out
+
+
+def delete(ids):
+    """Elimina le sessioni e i loro file. La sessione PRIMA di un test Prima / Dopo in corso non si tocca.
+    Restituisce (eliminate, protette)."""
+    ids = {int(i) for i in ids}
+    exp = experiment()
+    protected = {exp.get("prima")} & ids if exp else set()
+    data = _load(FILE, [])
+    keep = [s for s in data if s["id"] not in ids or s["id"] in protected]
+    gone = [s for s in data if s["id"] in ids and s["id"] not in protected]
+    _save(FILE, keep)
+    for s in gone:
+        for p in _files(s):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+    return len(gone), len(protected)
+
+
 # ------------------------------------------------------------ esperimento prima/dopo
 
 def experiment():

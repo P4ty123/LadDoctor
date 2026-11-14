@@ -770,6 +770,12 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/experiment/end":
             sessions.end_experiment()
             return 200, {"ok": True}
+        elif path == "/api/sessions/delete":
+            n, prot = sessions.delete(b.get("ids") or [])
+            msg = "Eliminate %d sessioni." % n if n != 1 else "Eliminata 1 sessione."
+            if prot:
+                msg += " La partita PRIMA del test Prima / Dopo in corso non e' stata eliminata."
+            return 200, {"ok": True, "deleted": n, "msg": msg}
         elif path == "/api/ignore":
             tid = b.get("id")
             if tid not in tweaks.BY_ID:

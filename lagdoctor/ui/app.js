@@ -37,6 +37,7 @@ const ICP = {
   report: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>',
 };
 const ic = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICP[k]}</svg>`;
 /* pulsante nel nuovo stile: icona + testo (+ freccia) */
@@ -58,19 +59,70 @@ async function runJob(start, onUpdate) {
 function logList(el, msgs) { el.innerHTML = msgs.map((m) => "<li>" + esc(m) + "</li>").join(""); el.scrollTop = el.scrollHeight; }
 
 /* ------------------------------------------------------------------ navigazione */
-/* "exp" e "sessions" sono schede dentro "Analizza gioco" */
-function go(page) {
+/* animazioni: la scheda vecchia scompare, la nuova entra dal basso (niente animazioni se Windows le ha spente) */
+const RM = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/* con una barra fissa dentro (.bar) solo dissolvenza: lo spostamento la farebbe saltare */
+const animCls = (el) => (el === main() || el.querySelector(".bar") || el.classList.contains("bar")) ? "fade" : "";
+function animOut(els) { els.forEach((el) => { el.classList.remove("sw-in"); el.classList.add("sw-out"); const c = animCls(el); if (c) el.classList.add(c); }); }
+function animIn(els) {
+  if (RM) return;
+  els.forEach((el, i) => {
+    el.classList.remove("sw-out", "sw-in");
+    const c = animCls(el); el.classList.toggle("fade", !!c);
+    void el.offsetWidth;  /* riparte l'animazione */
+    el.style.animationDelay = Math.min(i, 6) * 40 + "ms";
+    el.classList.add("sw-in");
+  });
+}
+/* il contenuto sotto la barra delle sotto-schede (Analizza gioco, Avvio automatico) */
+function belowTabs() {
+  const kids = [...main().children], i = kids.findIndex((k) => k.matches(".rg-head, .tabs2"));
+  return i >= 0 ? kids.slice(i + 1) : kids;
+}
+/* aspetta che la pagina nuova sia disegnata (non che abbia finito di caricare tutto) */
+function rendered(old, promise) {
+  return Promise.race([promise, new Promise((res) => {
+    const mo = new MutationObserver(() => { if (main().firstElementChild !== old) { mo.disconnect(); res(); } });
+    mo.observe(main(), { childList: true }); setTimeout(() => { mo.disconnect(); res(); }, 5000);
+  })]);
+}
+/* sotto-schede di Ottimizzazioni: categoria o filtro */
+async function swapTweaks(change) {
+  const list = $("#tw-list");
+  if (!RM && list) { animOut([list]); await wait(110); }
+  change(); renderTweaks();
+  if ($("#tw-list")) { $("#tw-list").classList.remove("sw-out"); animIn([$("#tw-list")]); }
+}
+
+/* "exp" e "sessions" sono schede dentro "Analizza gioco". opt.sub = cambio di sotto-scheda, opt.quiet = senza animazione */
+async function go(page, opt = {}) {
   if (page === "exp" || page === "sessions") { S.recTab = page; page = "record"; }
+  const tok = S.navTok = (S.navTok || 0) + 1;
+  const anim = !RM && !opt.quiet && S.page !== undefined && main().firstElementChild;
+  const sub = anim && opt.sub;
+  if (anim) {
+    animOut(sub ? belowTabs() : [main()]);
+    await wait(sub ? 120 : 150);
+    if (tok !== S.navTok) return;  /* nel frattempo e' stata scelta un'altra scheda */
+  }
   S.page = page;
   const navPage = page === "scan" || page === "verifica" ? "home" : page;  /* pagine aperte dalla Panoramica */
   $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === navPage));
   clearInterval(S.sensorTimer);
   main().scrollTop = 0;
   refreshState().catch(() => {});
-  if (page === "record") return ({ rec: record, exp, sessions })[S.recTab || "rec"]();
-  ({ home, scan, tweaks: tweaksPage, driver, startup, gamemode: gamemodePage, verifica: verificaPage })[page]();
+  const old = main().firstElementChild;
+  const fn = page === "record" ? ({ rec: record, exp, sessions })[S.recTab || "rec"]
+    : ({ home, scan, tweaks: tweaksPage, driver, startup, gamemode: gamemodePage, verifica: verificaPage })[page];
+  const p = Promise.resolve().then(fn).catch((e) => { main().classList.remove("sw-out", "fade"); throw e; });
+  if (!anim) return p;
+  await rendered(old, p.catch(() => {}));
+  if (tok !== S.navTok) return;
+  main().classList.remove("sw-out", "fade");
+  animIn(sub ? belowTabs() : [...main().children]);
 }
-$$("#nav a").forEach((a) => a.addEventListener("click", () => { if (a.dataset.page === "record") S.recTab = "rec"; go(a.dataset.page); }));
+$$("#nav a").forEach((a) => a.addEventListener("click", () => { if (a.dataset.page === S.page && a.dataset.page !== "record") return; if (a.dataset.page === "record") S.recTab = "rec"; go(a.dataset.page); }));
 
 function recTabs(active) {
   const exp = S.state && S.state.experiment ? ' <span class="pill warn">in corso</span>' : "";
@@ -85,7 +137,7 @@ function recHead(tab, sub) {
 }
 const REC_SUB = "Registra una partita: LagDoctor misura ogni frame e ti dice cosa causa scatti e lag.";
 function bindRecTabs() {
-  $$("#rec-tabs a").forEach((a) => a.addEventListener("click", () => { S.recTab = a.dataset.t; go("record"); }));
+  $$("#rec-tabs a").forEach((a) => a.addEventListener("click", () => { if (a.classList.contains("on")) return; S.recTab = a.dataset.t; go("record", { sub: true }); }));
 }
 
 async function refreshState() {
@@ -352,9 +404,11 @@ async function tweaksPage() {
     <div class="bar"><span id="sel-count" class="grow mut">Nessuna voce selezionata</span>
       <button class="ghost" id="undo-btn">Annulla modifiche...</button><button id="apply-btn" disabled>Applica</button></div>`;
   $$("#filters a").forEach((c) => c.addEventListener("click", () => {
-    S.filter = c.dataset.f;
-    if (S.twCat && !filtered().some((t) => t.cat === S.twCat)) S.twCat = "";  /* categoria vuota con questo filtro: mostro tutto */
-    renderTweaks();
+    if (S.filter === c.dataset.f) return;
+    swapTweaks(() => {
+      S.filter = c.dataset.f;
+      if (S.twCat && !filtered().some((t) => t.cat === S.twCat)) S.twCat = "";  /* categoria vuota con questo filtro: mostro tutto */
+    });
   }));
   $("#q").addEventListener("input", renderTweaks);
   $("#sel-rec").onclick = () => { visible().forEach((t) => { if (t.kind !== "myth" && (t.recommended || t.kind === "fix" || t.harm_if_off) && selectable(t)) S.sel.add(t.id); }); renderTweaks(); };
@@ -500,7 +554,7 @@ function renderTweaks() {
       <div class="p"><i style="width:${pct}%"></i></div></div>`;
   };
   $("#cats").innerHTML = catRow("", "Tutte le categorie", act) + order.map((c) => catRow(c, c, act.filter((t) => t.cat === c))).join("");
-  $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { if (el.dataset.cat === OV_CAT && S.twCat !== OV_CAT) S.ovLoaded = false; S.twCat = el.dataset.cat; renderTweaks(); }));
+  $$("#cats .cat").forEach((el) => el.addEventListener("click", () => { if (S.twCat === el.dataset.cat) return; if (el.dataset.cat === OV_CAT && S.twCat !== OV_CAT) S.ovLoaded = false; swapTweaks(() => { S.twCat = el.dataset.cat; }); }));
   /* pannello a destra */
   const list = visible();
   const fname = { fix: "da correggere", all: "", rec: "consigliate", off: "non attive", on: "attive", ign: "ignorate", myth: "non affidabili" }[S.filter] || "";
@@ -707,7 +761,7 @@ async function startup() {
     <div class="tabs2"><a data-st="prog" class="${S.stTab === "prog" ? "on" : ""}">Programmi<small id="st-n-prog"></small></a>
       <a data-st="proc" class="${S.stTab === "proc" ? "on" : ""}">Processi in background<small id="st-n-proc"></small></a></div>
     <div id="st-body"><div class="loading"><div class="spinner"></div><p>Leggo cosa parte con Windows...</p></div></div>`;
-  $$("[data-st]").forEach((a) => a.onclick = () => { S.stTab = a.dataset.st; startup(); });
+  $$("[data-st]").forEach((a) => a.onclick = () => { if (S.stTab === a.dataset.st) return; S.stTab = a.dataset.st; go("startup", { sub: true }); });
   if (S.stTab === "prog") return startupPrograms();
   return startupProcesses();
 }
@@ -716,6 +770,7 @@ async function startupPrograms() {
   const r = await api("/api/startup");
   const bad = new Set(r.bad);
   $("#st-n-prog").textContent = r.items.length;
+  animIn([$("#st-body")]);
   $("#st-body").innerHTML = `<div class="tools"><input type="search" id="st-q" placeholder="Cerca..." style="width:220px"><span class="grow"></span><span class="mut" style="font-size:12px">Interruttore acceso = parte con Windows</span></div>
     <div id="st-list"></div>`;
   const draw = () => {
@@ -741,6 +796,7 @@ async function startupProcesses() {
   try { r = await api("/api/autostart" + (S.stAll ? "?all=1" : "")); }
   catch (e) { $("#st-body").innerHTML = `<div class="empty">Errore: ${esc(e.message)}</div>`; return; }
   $("#st-n-proc").textContent = r.items.filter((x) => x.group !== "win").length;
+  animIn([$("#st-body")]);
   $("#st-body").innerHTML = `<div class="note"><b>Servizi e attivita' pianificate</b> che non si vedono in Gestione attivita' &gt; Avvio. Spegnendo l'interruttore LagDoctor <b>toglie l'avvio automatico</b> (servizio Disattivato, attivita' disattivata): se e' aperto viene fermato <b>una volta sola</b> e non ripartira', senza chiusure continue. Riaccendi l'interruttore per rimettere tutto com'era (anche con "Ripristina tutto").</div>
     <div class="tools"><input type="search" id="st-q" placeholder="Cerca..." style="width:220px"><label class="chk"><input type="checkbox" id="st-all" ${S.stAll ? "checked" : ""}> Mostra anche i componenti di Windows</label>
       <span class="grow"></span><span class="mut" style="font-size:12px">Interruttore acceso = parte con Windows</span></div>
@@ -967,7 +1023,10 @@ async function pollRecording(job) {
     if (S.page === "record") recordResult(done.result); else toast("Analisi completata: apri 'Analizza gioco' per vedere il risultato.", 6000);
   } catch (e) {
     S.rec = null; S.recCtx = null; S.lastRecord = null;
-    if (S.page !== "record") go("record");
+    /* passo ad Analizza gioco senza disegnare la pagina: qui sotto mostro l'errore */
+    S.navTok = (S.navTok || 0) + 1; S.page = "record"; clearInterval(S.sensorTimer);
+    $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === "record"));
+    main().classList.remove("sw-out", "fade");
     main().innerHTML = `<h1>Registrazione non riuscita</h1><div class="prob s3"><p style="white-space:pre-line">${esc(e.message)}</p></div>
       <div class="row"><button id="again">Riprova</button>${/PresentMon/.test(e.message) ? '<button class="ghost" id="pm-page">Apri la pagina di download di PresentMon</button>' : ""}</div>`;
     if ($("#pm-page")) $("#pm-page").onclick = () => window.open("https://github.com/GameTechDev/PresentMon/releases", "_blank");
@@ -1175,23 +1234,58 @@ function compareHtml(c) {
 /* ------------------------------------------------------------------ SESSIONI */
 async function sessions() {
   const ss = await api("/api/sessions");
-  const pick = [];
-  main().innerHTML = `${recHead("sessions", "Le partite registrate. Seleziona due sessioni per confrontarle.")}
-    ${ss.items.length ? `<div class="card stbl"><table><tr><th></th><th>#</th><th>Gioco</th><th>Data</th><th>Tipo</th><th>FPS</th><th>1% low</th><th>Stutter/min</th><th></th></tr>
-      ${ss.items.map((s) => `<tr><td><input type="checkbox" value="${s.id}"></td><td class="mut">${s.id}</td><td><b>${esc(s.gioco)}</b></td><td class="mut">${esc(s.data)}</td><td>${s.etichetta ? `<span class="badge ${s.etichetta === "DOPO" ? "b-ok" : "b-acc"}">${esc(s.etichetta)}</span>` : ""}</td>
-      <td><b>${fmt(s.fps_medi)}</b></td><td>${fmt(s.fps_1low)}</td><td>${fmt(s.stutter_min, 1)}</td><td>${s.report ? actBtn(`data-rep="${esc(base(s.report))}"`, "report", "Report", "sm", false) : ""}</td></tr>`).join("")}</table></div>` : '<div class="empty">Nessuna sessione: registra una partita dalla scheda Registra.</div>'}
+  const sel = new Set();
+  const exp = S.state && S.state.experiment;
+  main().innerHTML = `${recHead("sessions", "Le partite registrate. Seleziona due sessioni per confrontarle, o quelle da eliminare.")}
+    ${ss.items.length ? `<div class="sess-tools"><span class="mut">${ss.items.length} ${ss.items.length === 1 ? "sessione" : "sessioni"}</span>
+        <label class="chk"><input type="checkbox" id="sel-all"> Seleziona tutte</label><span class="grow"></span>
+        ${actBtn('id="del-sel" disabled', "trash", "Elimina selezionate", "sm danger", false)}</div>
+      <div class="card stbl"><table><tr><th></th><th>#</th><th>Gioco</th><th>Data</th><th>Tipo</th><th>FPS</th><th>1% low</th><th>Stutter/min</th><th></th></tr>
+      ${ss.items.map((s) => `<tr data-row="${s.id}"><td><input type="checkbox" value="${s.id}"></td><td class="mut">${s.id}</td><td><b>${esc(s.gioco)}</b></td><td class="mut">${esc(s.data)}</td><td>${s.etichetta ? `<span class="badge ${s.etichetta === "DOPO" ? "b-ok" : "b-acc"}">${esc(s.etichetta)}</span>` : ""}</td>
+      <td><b>${fmt(s.fps_medi)}</b></td><td>${fmt(s.fps_1low)}</td><td>${fmt(s.stutter_min, 1)}</td>
+      <td class="row-acts">${s.report ? actBtn(`data-rep="${esc(base(s.report))}"`, "report", "Report", "sm", false) : ""}<button class="del-one" data-del="${s.id}" title="Elimina questa sessione" aria-label="Elimina la sessione ${s.id}">${ic("trash")}</button></td></tr>`).join("")}</table></div>`
+      : '<div class="empty">Nessuna sessione: registra una partita dalla scheda Registra.</div>'}
     <div id="cmp"></div>
-    <div class="bar"><span class="grow mut" id="cmp-n">Seleziona 2 sessioni (la prima e' il PRIMA)</span><button id="cmp-go" disabled>Confronta</button></div>`;
+    <div class="bar"><span class="grow mut" id="cmp-n">Seleziona 2 sessioni per confrontarle (la prima e' il PRIMA)</span><button id="cmp-go" disabled>Confronta</button></div>`;
   bindRecTabs();
   $$("[data-rep]").forEach((b) => (b.onclick = () => window.open(reportUrl(b.dataset.rep), "_blank")));
-  $$("td input").forEach((c) => c.addEventListener("change", () => {
-    const id = Number(c.value);
-    if (c.checked) { pick.push(id); if (pick.length > 2) { const old = pick.shift(); $(`td input[value="${old}"]`).checked = false; } }
-    else pick.splice(pick.indexOf(id), 1);
-    $("#cmp-go").disabled = pick.length !== 2;
-    $("#cmp-n").textContent = pick.length === 2 ? `PRIMA #${Math.min(...pick)} → DOPO #${Math.max(...pick)}` : "Seleziona 2 sessioni";
-  }));
-  $("#cmp-go").onclick = async () => { const c = await api(`/api/compare?a=${Math.min(...pick)}&b=${Math.max(...pick)}`); $("#cmp").innerHTML = "<h2>Confronto</h2>" + compareHtml(c); };
+  const upd = () => {
+    const ids = [...sel];
+    $("#cmp-go").disabled = ids.length !== 2;
+    $("#cmp-n").textContent = ids.length === 2 ? `PRIMA #${Math.min(...ids)} → DOPO #${Math.max(...ids)}`
+      : ids.length ? `${ids.length} ${ids.length === 1 ? "sessione selezionata" : "sessioni selezionate"}${ids.length > 2 ? " (per confrontare scegline 2)" : ""}`
+      : "Seleziona 2 sessioni per confrontarle (la prima e' il PRIMA)";
+    if ($("#del-sel")) { $("#del-sel").disabled = !ids.length; $("#del-sel span:nth-child(2)").textContent = ids.length ? `Elimina selezionate (${ids.length})` : "Elimina selezionate"; }
+    if ($("#sel-all")) $("#sel-all").checked = ids.length === ss.items.length;
+    $$("tr[data-row]").forEach((r) => r.classList.toggle("on", sel.has(Number(r.dataset.row))));
+  };
+  $$("td input").forEach((c) => c.addEventListener("change", () => { c.checked ? sel.add(Number(c.value)) : sel.delete(Number(c.value)); upd(); }));
+  if ($("#sel-all")) $("#sel-all").onchange = (e) => { $$("td input").forEach((c) => { c.checked = e.target.checked; c.checked ? sel.add(Number(c.value)) : sel.delete(Number(c.value)); }); upd(); };
+  const del = (ids) => {
+    const list = ss.items.filter((x) => ids.includes(x.id));
+    const prot = exp && ids.includes(exp.prima);
+    const m = modal(`<h2>Eliminare ${ids.length === 1 ? "la sessione" : ids.length + " sessioni"}?</h2>
+      <p>Vengono cancellati anche ${ids.length === 1 ? "il suo report e i dati registrati" : "i loro report e i dati registrati"}. Non si puo' annullare.</p>
+      <ul>${list.slice(0, 6).map((x) => `<li>#${x.id} ${esc(x.gioco)} <span class="mut">· ${esc(x.data)}</span></li>`).join("")}${list.length > 6 ? `<li class="mut">e altre ${list.length - 6}...</li>` : ""}</ul>
+      ${prot ? `<div class="banner">La sessione #${exp.prima} e' la partita PRIMA del test Prima / Dopo in corso: resta.</div>` : ""}
+      <div class="row" style="justify-content:flex-end"><button class="ghost" id="m-cancel">Annulla</button><button class="red" id="m-ok">Elimina</button></div>`);
+    $("#m-cancel", m).onclick = closeModal;
+    $("#m-ok", m).onclick = async () => {
+      $("#m-ok", m).disabled = true;
+      try {
+        const r = await api("/api/sessions/delete", { ids });
+        closeModal();
+        const rows = ids.map((i) => $(`tr[data-row="${i}"]`)).filter((x) => x && !(prot && Number(x.dataset.row) === exp.prima));
+        if (!RM) { rows.forEach((x) => x.classList.add("row-out")); await wait(260); }
+        toast(r.msg);
+        if (S.lastRecord && S.lastRecord.result && ids.includes(S.lastRecord.result.session.id)) S.lastRecord = null;
+        sessions();
+      } catch (e) { toast("Errore: " + e.message); closeModal(); }
+    };
+  };
+  if ($("#del-sel")) $("#del-sel").onclick = () => sel.size && del([...sel]);
+  $$("[data-del]").forEach((b) => (b.onclick = () => del([Number(b.dataset.del)])));
+  $("#cmp-go").onclick = async () => { const ids = [...sel]; const c = await api(`/api/compare?a=${Math.min(...ids)}&b=${Math.max(...ids)}`); $("#cmp").innerHTML = "<h2>Confronto</h2>" + compareHtml(c); animIn([$("#cmp")]); };
 }
 
 /* ------------------------------------------------------------------ azioni globali */
@@ -1362,7 +1456,7 @@ async function backgroundBoot(job) {
   setBooting(false);
   await loadCatalog(true).catch(() => {});
   /* aggiorno la pagina aperta, se mostra dati della scansione (non se c'e' una finestra aperta) */
-  if ($("#modal").hidden && ["home", "scan", "tweaks", "driver"].includes(S.page)) go(S.page);
+  if ($("#modal").hidden && ["home", "scan", "tweaks", "driver"].includes(S.page)) go(S.page, { quiet: true });
   toast("Scansione delle impostazioni completata");
 }
 (async () => {

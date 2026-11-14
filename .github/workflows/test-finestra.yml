@@ -29,4 +29,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: prova-finestra
-          path: risultati
+          path: |
+            risultati/*.png
+            risultati/*.txt
+            risultati/dati/*.txt
+            risultati/dati/*.json

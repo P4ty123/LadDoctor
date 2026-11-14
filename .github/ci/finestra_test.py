@@ -65,10 +65,16 @@ for i in range(SECONDS):
             log.write("foto non riuscita: %s\n" % e)
 for p in psutil.process_iter(["pid", "cmdline"]):
     cmd = " ".join(p.info["cmdline"] or [])
-    if "lagdoctor_gui.py" in cmd or "--finestra" in cmd:
+    if "lagdoctor_gui.py" in cmd or "--finestra" in cmd or DATA.lower() in cmd.lower():
         try:
             p.kill()
         except psutil.Error:
             pass
 srv.kill()
+time.sleep(2)
+for name in ("errore-finestra.txt", "finestra-console.txt", "errore.txt", "server-console.txt"):
+    p = os.path.join(DATA, name)
+    if os.path.isfile(p):
+        print("\n========== %s ==========" % name)
+        print(open(p, encoding="utf-8", errors="replace").read()[-20000:])
 print("fatto")

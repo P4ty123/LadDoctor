@@ -1056,6 +1056,13 @@ class Engine:
             self._anticheat_game(proc, game, opts, info, ac)
         else:
             self._direct(proc, game, opts, info)
+        # anche nel diario: se il programma invisibile viene chiuso a meta' (game mode spenta durante il gioco,
+        # crash), chi ripristina sa comunque rimettere priorita', priorita' GPU e affinita' del gioco
+        if self.j is not None and (info.get("prev_prio") is not None or info.get("prev_aff")):
+            self.j.setdefault("gproc", {})[str(proc.pid)] = {
+                "create": info["create"], "prev_prio": info.get("prev_prio"), "prev_aff": info.get("prev_aff"),
+                "gpu": bool(info.get("gpu_set"))}
+            self._jsave()
         if opts.get("qos"):
             self._qos_add(info["name"])
 
@@ -1248,14 +1255,19 @@ class Engine:
         # PRIMA di tutto Esplora risorse: barra delle applicazioni e desktop tornano subito (il resto, piu' lento,
         # viene ripristinato dopo, mentre usi gia' il PC)
         self.restore_shell()
-        # priorita' e affinita' dei giochi ancora aperti (se la game mode viene spenta durante il gioco)
-        for pid, info in list(self.game_pids.items()):
+        # priorita' e affinita' dei giochi ancora aperti (se la game mode viene spenta durante il gioco); quelli
+        # scritti nel diario valgono anche quando a ripristinare e' un altro processo (dopo un'interruzione)
+        procs = {int(k): v for k, v in (j.get("gproc") or {}).items()}
+        procs.update(self.game_pids)
+        for pid, info in list(procs.items()):
             try:
                 p = psutil.Process(pid)
                 if abs(p.create_time() - info["create"]) >= 1:
                     continue
                 if info.get("prev_prio") is not None:
                     p.nice(info["prev_prio"])
+                    _set_gpu_priority(pid, 2)
+                elif info.get("gpu"):
                     _set_gpu_priority(pid, 2)
                 if info.get("prev_aff"):
                     p.cpu_affinity(info["prev_aff"])
@@ -1557,7 +1569,9 @@ def disable():
         gpu_pref_clear()
     except Exception:
         pass
-    for _ in range(20):
+    # il programma invisibile ripristina tutto e si chiude: gli lascio il tempo di finire (far ripartire i servizi
+    # puo' richiedere un minuto); se non risponde lo chiudo e il ripristino lo fa recover() qui sotto dal diario
+    for _ in range(240):
         if not daemon_pid():
             break
         time.sleep(0.5)

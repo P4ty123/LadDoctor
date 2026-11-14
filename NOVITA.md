@@ -1,3 +1,12 @@
+## LagDoctor 5.25.11
+
+- Game mode spenta mentre si gioca: ora si aspetta che il ripristino finisca (fino a 2 minuti: far ripartire i
+  servizi puo' essere lento) invece di 10 secondi. Se il programma invisibile non risponde, il ripristino lo fa
+  LagDoctor dal diario delle modifiche.
+- La priorita' CPU, la priorita' GPU e l'affinita' del gioco vengono scritte anche nel diario: se il programma
+  invisibile viene chiuso a meta' (game mode spenta durante il gioco, crash), vengono rimesse com'erano anche
+  con il gioco ancora aperto (prima restavano alte finche' non chiudevi il gioco).
+
 ## LagDoctor 5.25.10
 
 - Game mode e Minecraft Java: la game mode si attivava gia' aprendo TLauncher (o altri launcher Java), che veniva

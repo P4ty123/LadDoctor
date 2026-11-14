@@ -1,0 +1,32 @@
+# Prova della finestra WebView2 (sperimentale) su Windows: NON pubblica niente.
+# Parte con una modifica caricata sul branch test/finestra o a mano (Actions > Prova finestra > Run workflow).
+name: Prova finestra
+
+on:
+  push:
+    branches: [test/finestra]
+  workflow_dispatch:
+
+jobs:
+  prova:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Componenti
+        run: python -m pip install psutil==7.0.0 pywebview==6.2.1 pillow
+      - name: Versione di WebView2
+        shell: pwsh
+        run: |
+          Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}" -ErrorAction SilentlyContinue | Select-Object pv, name
+      - name: Prova (60 secondi)
+        run: python .github/ci/finestra_test.py risultati 60
+      - name: Risultati
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prova-finestra
+          path: risultati

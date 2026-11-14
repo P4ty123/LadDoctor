@@ -160,6 +160,41 @@ class Watch:
             os._exit(FAILED)
 
 
+def _hang_detector(win):
+    """Ogni secondo chiede al thread della finestra di rispondere. Se non risponde per 5 secondi (la finestra e'
+    bloccata), scrive nel registro dove si trova OGNI thread Python in quel momento: e' il punto del blocco."""
+    import faulthandler
+    state = {"last": time.time(), "dumped": False}
+
+    def pong():
+        state["last"] = time.time()
+
+    def loop():
+        from System import Action
+        while True:
+            time.sleep(1)
+            try:
+                form = win.native
+                if form is None or form.IsDisposed:
+                    continue
+                form.BeginInvoke(Action(pong))
+            except Exception:
+                continue
+            if time.time() - state["last"] > 5 and not state["dumped"]:
+                state["dumped"] = True
+                _log("FINESTRA BLOCCATA da %.0f secondi: ecco dove si trova ogni thread" % (time.time() - state["last"]))
+                try:
+                    with open(_log_path(), "a", encoding="utf-8") as f:
+                        faulthandler.dump_traceback(file=f, all_threads=True)
+                        f.write("\n")
+                except Exception:
+                    pass
+            elif time.time() - state["last"] < 2 and state["dumped"]:
+                state["dumped"] = False
+                _log("la finestra risponde di nuovo")
+    threading.Thread(target=loop, daemon=True, name="controllo-blocco").start()
+
+
 def _dotnet_handlers():
     """Errori di .NET (WinForms, WebView2): scritti nel registro. Quelli del thread della finestra non la chiudono."""
     try:
@@ -219,7 +254,7 @@ def main(args):
         watch = Watch()
         watch._window = win
         win.events.loaded += watch.attach
-        win.events.shown += lambda: _log("fase: finestra mostrata")
+        win.events.shown += lambda: (_log("fase: finestra mostrata"), _hang_detector(win))
         win.events.closed += lambda: _log("fase: finestra chiusa")
         _log("fase: avvio di WebView2")
         icon = os.path.join(paths.RES_DIR, "lagdoctor", "ui", "lagdoctor.ico")
